@@ -4,6 +4,7 @@ from __future__ import annotations
 import pygame
 
 from npc.roster import character_name
+from ui import sprites
 from ui import theme as T
 
 
@@ -61,33 +62,27 @@ def draw_overworld(screen, world, rooms):
         cx, cy = lx * T.TILE + T.TILE // 2, ly * T.TILE + T.TILE // 2
         lit = world.lamps.get(lamp_id, False)
         if lit:
-            _draw_glow(screen, (cx, cy), T.TILE, T.LAMP_GLOW, 60)
-        # post
-        pygame.draw.rect(screen, (44, 42, 54),
-                         pygame.Rect(cx - 2, cy, 4, T.TILE // 2 - 2))
-        pygame.draw.circle(screen, T.LAMP_ON if lit else T.LAMP_OFF, (cx, cy - 4), 7)
-        pygame.draw.circle(screen, (20, 20, 28), (cx, cy - 4), 7, 1)
+            _draw_glow(screen, (cx, cy - 6), T.TILE, T.LAMP_GLOW, 60)
+        spr = sprites.lamp_surface(lit)
+        screen.blit(spr, (lx * T.TILE + (T.TILE - spr.get_width()) // 2,
+                          ly * T.TILE + (T.TILE - spr.get_height())))
 
     # NPCs in this room
     for npc in world.npcs.values():
         if npc.room != room.id:
             continue
-        _draw_actor(screen, npc.x, npc.y, T.npc_color(npc.npc_id),
-                    character_name(npc.npc_id))
+        _draw_actor(screen, npc.x, npc.y, npc.npc_id, character_name(npc.npc_id))
 
     # player
-    _draw_actor(screen, world.player.x, world.player.y, T.PLAYER, None, is_player=True)
+    _draw_actor(screen, world.player.x, world.player.y, "player", None)
 
 
-def _draw_actor(screen, tx, ty, color, name, *, is_player=False):
-    r = _tile_rect(tx, ty).inflate(-8, -8)
-    pygame.draw.rect(screen, color, r, border_radius=6)
-    pygame.draw.rect(screen, (10, 10, 16), r, 2, border_radius=6)
-    if is_player:
-        # simple face dots so the player reads as a character
-        eye_y = r.top + r.height // 3
-        pygame.draw.circle(screen, (40, 40, 40), (r.centerx - 5, eye_y), 2)
-        pygame.draw.circle(screen, (40, 40, 40), (r.centerx + 5, eye_y), 2)
+def _draw_actor(screen, tx, ty, key, name):
+    spr = sprites.actor_surface(key)
+    px = tx * T.TILE + (T.TILE - spr.get_width()) // 2
+    py = ty * T.TILE + (T.TILE - spr.get_height())
+    r = spr.get_rect(topleft=(px, py))
+    screen.blit(spr, (px, py))
     if name:
         img = T.font(14, bold=True).render(name, True, T.TEXT)
         nr = img.get_rect(midbottom=(r.centerx, r.top - 2))

@@ -56,7 +56,10 @@ the api_key in logs or commits.
   combat action hooks so M2 is additive.
 - **M2: combat.** Turn-based JRPG menu (attack/defend/item/flee) PLUS **ACT/mercy** to
   talk down hostile NPCs and the Gloam via the LLM. NPCs can `join_combat`.
-- **Later:** more NPCs, richer map, memory summarization/compaction, real art.
+- **M1 polish (done):** save/load (`engine/save.py`), memory summarization
+  (`npc/memory.py` + `agent.summarize_memory`), procedural pixel-art sprites
+  (`ui/sprites.py`).
+- **Later:** more NPCs (Sella/Perrin files exist, unspawned), richer map, richer art.
 
 ## Events & memory (added after first M1 pass)
 - **Event log** (`engine/journal.py`, `EventLog` on `WorldState.events`) is the shared
@@ -80,6 +83,12 @@ the api_key in logs or commits.
   grows.
 - Affinity is a numeric score the LLM nudges via `adjust_affinity {delta, reason}`;
   category (hostile/wary/neutral/friendly) is derived.
+- **Persistence:** full `WorldState` autosaves to `save/game.json` on quit and reloads
+  on start (per-NPC memory persists separately in `runtime_memory/`). `main.py --fresh`
+  wipes both. Memory files are `{summary, entries}`; the log auto-compacts via the LLM
+  once it grows past a threshold (compaction runs in the dialogue worker thread).
+- **Sprites** are built procedurally at low res and nearest-scaled (`ui/sprites.py`),
+  tinted per character; no binary art assets are committed.
 - **Oil is a real prerequisite:** lighting a lamp consumes an `oil_flask`; Wren reliably
   grants 3 flasks with the starter quest (deterministic, not LLM-dependent). Content flavor
   (NPCs *mentioning* oil) stays with the LLM; the mechanic stays in the engine.

@@ -32,8 +32,10 @@ cp settings.example.json settings.json   # then fill in your endpoint
 .venv/bin/python main.py --fresh    # wipe NPC memory and start clean
 ```
 
-Move with **Arrows/WASD**, interact with **E**, quit with **Esc**. Walk up to an
-NPC and press E to talk; type freely; press Enter to send.
+Move with **Arrows/WASD**, interact with **E**, open the journal with **J**, quit
+with **Esc**. Walk up to an NPC and press E to talk; type freely; press Enter to
+send. Progress **autosaves on quit** and reloads next launch (use `--fresh` to
+wipe the save and all NPC memory).
 
 ## How it fits together
 
