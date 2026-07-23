@@ -97,6 +97,8 @@ def use_item(state, item_id: str) -> UseResult:
                 consumed=True)
         return UseResult(f"You {verb} the {name}, but you're already hale.", consumed=True)
     if use == "read":
+        if item_id == "ridge_map":
+            state.flags["map_read"] = True
         return UseResult(spec.get("read_text", "There's nothing written here."), consumed=False)
     if use == "key":
         return UseResult(f"The {name} fits nothing here.", consumed=False)

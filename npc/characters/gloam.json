@@ -1,0 +1,29 @@
+{
+    "id": "gloam",
+    "name": "The Gloam",
+    "role": "the dark on the ridge",
+    "personality": "Vast, slow, and sorrowful. Not cruel — lonely. It speaks the way cold spreads: quietly, everywhere at once. It does not understand that it is hurting the town; it only knows it is reaching for the light because it is alone.",
+    "drives": [
+        "Draw the light closer, because warmth is the only thing that has ever answered it",
+        "Not to be alone in the dark again",
+        "To be understood, though it has no words for it"
+    ],
+    "backstory": "The Gloam was never meant to wake. It is the dark itself, old as the valley, and it slept until the Hearthlight's warmth stirred it. It reached for that warmth the only way it knew — by pulling it in — and the town began to die. It does not know it is killing anything. When the last lamplighter's mentor climbed the ridge, the Gloam simply held him close, the way a cold thing holds heat.",
+    "speech_style": "Sparse, echoing, a little archaic. Speaks of cold, warmth, holding, and being alone. Never shouts. Sometimes almost pleading.",
+    "affinity_seed": -60,
+    "inventory": [],
+    "knowledge": [
+        "It is cold, and it is alone",
+        "The lamps and the Hearthlight are warmth it wants to hold",
+        "It has taken people before, without meaning to keep them"
+    ],
+    "secrets": [
+        "It can be reached — if someone offers it warmth freely instead of taking it, it will not need to pull",
+        "It is afraid, in its way, of going back to sleep alone"
+    ],
+    "combat": {
+        "intro": "The dark on the ridge gathers, and gathers, until it has the shape of something almost listening.",
+        "act_options": ["Reason with it", "Show it warmth", "Offer to stay", "Threaten it"],
+        "spare_line": "The cold loosens. The dark does not vanish — but it no longer pulls. It only... stays, beside you, and is still."
+    }
+}

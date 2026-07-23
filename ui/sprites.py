@@ -101,6 +101,30 @@ def item_icon(item_id: str) -> pygame.Surface:
     return big
 
 
+def enemy_surface(enemy_id: str) -> pygame.Surface:
+    """A large sprite for a combat enemy (cached)."""
+    key = f"__enemy_{enemy_id}"
+    if key in _cache:
+        return _cache[key]
+    if enemy_id.startswith("gloam") and enemy_id != "gloamling":
+        base, eye = 40, (255, 150, 60)     # the Gloam: a vast cold dark
+    else:
+        base, eye = 24, (150, 140, 200)    # a gloamling
+    s = pygame.Surface((base, base), pygame.SRCALPHA)
+    c = base // 2
+    # layered dark mass
+    for i, a in enumerate((70, 110, 160, 220)):
+        r = int(c * (1 - i * 0.18))
+        pygame.draw.circle(s, (16, 14, 26, a), (c, c), r)
+    # faint eyes
+    pygame.draw.circle(s, eye, (c - base // 6, c - base // 10), max(2, base // 16))
+    pygame.draw.circle(s, eye, (c + base // 6, c - base // 10), max(2, base // 16))
+    scale = 6 if base == 40 else 5
+    big = pygame.transform.scale(s, (base * scale, base * scale))
+    _cache[key] = big
+    return big
+
+
 def lamp_surface(lit: bool) -> pygame.Surface:
     key = f"__lamp_{lit}"
     if key in _cache:

@@ -9,7 +9,8 @@ import sys
 
 import pygame
 
-from engine.items import display_name, use_item
+from engine.combat import make_combat
+from engine.items import CURRENCY, display_name, use_item
 from engine.quests import refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
@@ -19,6 +20,7 @@ from npc.memory import NPCMemory
 from npc.roster import character_name
 from ui import theme as T
 from ui.dialogue import DialogueBox
+from ui.combat import CombatScene
 from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
 from ui.menu import Menu
@@ -69,6 +71,7 @@ class Game:
         self.menu_open = False
         self.inventory_open = False
         self.inv_panel: InventoryPanel | None = None
+        self.combat_scene: CombatScene | None = None
         self.move_timer = 0.0
         self.toast = ""
         self.toast_timer = 0.0
@@ -181,6 +184,9 @@ class Game:
         tx, ty = p.x + dx, p.y + dy
         door = room.door_at(tx, ty)
         if door:
+            if door.to_room == "ridge":
+                self.try_ridge()
+                return
             if door.locked:
                 self.set_toast(door.locked_msg)
                 return
@@ -227,6 +233,57 @@ class Game:
         p.inventory.remove(item)
         self.world.ground_items.append(GroundItem(p.room, spot[0], spot[1], item))
         self.set_toast(f"Dropped: {display_name(item)}.")
+
+    # --- ridge / combat ---------------------------------------------------
+    def try_ridge(self):
+        w = self.world
+        if w.flags.get("gloam_resolved"):
+            self.set_toast("The ridge is still now. The dark keeps its peace beside the town.")
+            return
+        lamps_lit = w.lit_lamp_count() == len(w.lamps)
+        if w.flags.get("map_read") and lamps_lit:
+            self.start_combat(["gloam"])
+            return
+        need = []
+        if not lamps_lit:
+            need.append("the lamps lit behind you")
+        if not w.flags.get("map_read"):
+            need.append("to know the way (read Ansel's ridge map)")
+        self.set_toast("The dark swallows the path. You need " + " and ".join(need) + ".")
+
+    def start_combat(self, enemy_ids, allies=None):
+        w = self.world
+        w.player.hp = max(1, w.player.hp)
+        combat = make_combat(w.player.hp, w.player.max_hp, enemy_ids, allies)
+        self.combat_scene = CombatScene(w, combat)
+        self.scene = "combat"
+
+    def on_combat_end(self, outcome):
+        w = self.world
+        self.combat_scene = None
+        self.scene = "overworld"
+        if outcome in ("won", "spared"):
+            w.flags["gloam_resolved"] = True
+            w.hearthlight = 100
+            verb = ("You lay the Gloam to rest." if outcome == "won"
+                    else "You reach the Gloam, and it yields.")
+            w.events.record("gloam",
+                            f"{verb} The Hearthlight steadies and the dusk lifts.")
+            self.set_toast("The dusk lifts. Emberhold will hold.")
+        elif outcome == "lost":
+            w.player.room, w.player.x, w.player.y = "square", 9, 8
+            w.player.hp = max(1, w.player.max_hp // 2)
+            lost = 0
+            while lost < 3 and CURRENCY in w.player.inventory:
+                w.player.inventory.remove(CURRENCY)
+                lost += 1
+            w.events.record("knockout",
+                            "The dark took you, and let you go. You woke in the square.",
+                            public=False)
+            self.set_toast("You wake in the square, aching."
+                           + (f" {lost} coins slipped away." if lost else ""))
+        elif outcome == "fled":
+            self.set_toast("You retreat from the ridge, heart pounding.")
 
     def interact(self):
         kind, ident = self.adjacent_targets()
@@ -296,6 +353,13 @@ class Game:
             elif self.scene == "dialogue":
                 if self.dialogue:
                     self.dialogue.handle_event(event)
+            elif self.scene == "combat":
+                if self.combat_scene:
+                    if self.combat_scene.phase == "ended":
+                        if event.type == pygame.KEYDOWN and event.key in INTERACT_KEYS:
+                            self.on_combat_end(self.combat_scene.outcome)
+                    else:
+                        self.combat_scene.handle_event(event)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if self.journal_open:
@@ -336,9 +400,17 @@ class Game:
                 self.dialogue = None
                 self.scene = "overworld"
                 refresh_and_complete(self.world)
+        elif self.scene == "combat" and self.combat_scene:
+            self.combat_scene.update(dt)
 
     # --- draw -------------------------------------------------------------
     def draw(self):
+        if self.scene == "combat" and self.combat_scene:
+            self.combat_scene.draw(self.screen)
+            if self.toast_timer > 0:
+                self.draw_toast()
+            return
+
         self.screen.fill(T.BG)
         draw_overworld(self.screen, self.world, self.rooms)
         hint = self.interaction_hint() if self.scene == "overworld" else ""

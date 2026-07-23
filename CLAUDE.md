@@ -80,6 +80,23 @@ the api_key in logs or commits.
   for world-triggered completions (e.g. lamps) and from `agent.act` when the giver is the
   NPC currently talking.
 
+## Combat (M2, in progress)
+- **Turn-based**, menu-driven (`engine/combat.py` logic; `ui/combat.py` scene). Player
+  actions: Attack / Defend / Act / Item / Spare / Flee. HP is the player's `PlayerState.hp`;
+  combat writes it back on exit. Defeat = **knocked out**, wake in the square at half HP
+  minus a few coins (never a hard game-over).
+- **ACT / mercy is LLM-driven** (`npc/combat_agent.py`): each enemy has `resolve`; ACT
+  approaches route to the enemy's AI, which reacts in character and lowers resolve — answer
+  what it truly wants and it becomes **spareable**, letting you end the fight peacefully.
+  Enemy turns are also AI-chosen (attack/heavy/loom) with mechanical fallbacks on LLM error.
+  Enemy turns run on a worker thread with a spinner, like dialogue.
+- **The Gloam** (`npc/characters/gloam.json`) is the boss: high HP, meant to be *reached*,
+  not ground down. The ridge path unseals once you've **read Ansel's ridge map** (sets
+  `flags['map_read']`) and **lit all the lamps**; stepping onto the ridge starts the fight.
+  Winning or sparing sets `flags['gloam_resolved']` and restores the Hearthlight.
+- **Build order (per user):** Gloam (done) → hostile NPCs + ally `join_combat` (todo) →
+  ridge creatures / bestiary (todo, `gloamling` stub exists).
+
 ## Items, inventory & economy
 - **Catalog** (`engine/items.py`) is the closed set of real items — each with a display
   name, description, coin `value`, and optional `use` behavior (`eat`/`drink` heal player
