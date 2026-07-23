@@ -1,0 +1,92 @@
+# The Last Lamplighter — AI-driven RPG framework
+
+An Undertale-style, turn-based RPG whose NPCs are driven by an LLM. The point of the
+project is the **framework**, not an AAA game: a small world where NPCs with their own
+drives, memory, and dispositions produce emergent quests and stories on the fly.
+
+## Vision / pillars
+- **Turn-based, open dialogue.** Player types free text; NPCs reply via LLM. No real-time.
+- **Actions-as-tools.** The LLM never mutates the game directly. Each NPC turn returns
+  `dialogue + a bounded list of actions` (give_quest, adjust_affinity, move_to,
+  offer_item, reveal_fact, end_dialogue, …). The engine **validates** every action against
+  real world entities and applies it. Invalid actions are dropped, never executed.
+- **Game state is the single source of truth.** Dispositions, inventory, quests, flags,
+  positions all live in `WorldState`. The LLM *reads* state as context and *proposes*
+  changes; it never silently "remembers" something the engine doesn't record.
+- **Emergent but checkable.** Quests use a bounded schema with an objective type from an
+  enum and a target that must resolve to a known entity, so the engine can detect
+  completion. Free-form flavor text, structured spine.
+- **Small on purpose.** ~4-5 characters, a handful of rooms. Set up for substantive
+  stories, not scale.
+
+## World (approved)
+Setting: **Emberhold**, a dying town in permanent dusk, kept alive by a failing great
+lantern, the **Hearthlight**. Something on the ridge is eating the light. Lore-goal:
+reach the ridge and confront **The Gloam** — a lonely, cold final "boss" you can fight
+OR talk down (ACT/mercy). Tone: melancholy-but-warm, very Undertale.
+
+Cast: **Wren** (lamplighter's apprentice, starter-quest giver), **Bram** (wary
+tavernkeeper), **Sella** (transactional scavenger who knows the ridge path), **Old
+Perrin** (guilt-ridden ex-lamplighter, mercy-route unlock), **The Gloam** (final boss).
+
+Starter quest (the ONE authored quest): Wren asks the player to relight 3 dead lamps
+around town. Teaches movement, NPC-given quest, checkable objective, reward. Everything
+after emerges from NPCs.
+
+## Tech stack
+- **Python 3.13**, deps in project `.venv/` (activate: `.venv/bin/python`).
+- **Pygame** — rendering + turn/scene loop. Placeholder programmatic art for now
+  (colored rects/labels); real pixel sprites later.
+- **LangGraph** — the NPC "brain" graph (perceive → reason → act). This is the engine,
+  per project requirement.
+- **OpenAI-compatible LLM** — user supplies `base_url`, `api_key`, `model` in
+  `settings.json` (gitignored). Never commit or echo the key. Calls go through the
+  `openai` SDK. Because the endpoint is an arbitrary proxy, prefer robust **JSON-in-content
+  parsing** over hard dependence on the function-calling API.
+
+## Config
+`settings.json` (gitignored, already present) holds `base_url`, `api_key`, `model`.
+`settings.example.json` is the committed template. Load via `llm/config.py`. Never print
+the api_key in logs or commits.
+
+## Milestones
+- **M1 (current): framework vertical slice.** Town + a couple rooms, Wren + one more NPC
+  live, free-text dialogue, starter quest firing AND completing via the checker, memory
+  persisting across a conversation, disposition shifting. **No combat** — but wire the
+  combat action hooks so M2 is additive.
+- **M2: combat.** Turn-based JRPG menu (attack/defend/item/flee) PLUS **ACT/mercy** to
+  talk down hostile NPCs and the Gloam via the LLM. NPCs can `join_combat`.
+- **Later:** more NPCs, richer map, memory summarization/compaction, real art.
+
+## Events & memory (added after first M1 pass)
+- **Event log** (`engine/journal.py`, `EventLog` on `WorldState.events`) is the shared
+  record of notable happenings (quest start/complete, lamp lit, arrivals, item gets).
+  *Public* events are folded into every NPC's briefing under "Recent happenings" so NPCs
+  are aware of world progression without being told. All events power the player-facing
+  **journal** (press **J**), `ui/journal.py`.
+- **Greeting continuity:** the `APPROACH` sentinel branches on whether the NPC has any
+  memory of the player. First meeting → introduce; return visit → acknowledge shared
+  history and react to what's changed. This fixed the original "same greeting every visit"
+  bug — the root cause was the greeting prompt never instructing the NPC to *use* memory
+  (the memory was in-context and the reply path used it fine; only the greeting ignored it).
+- **Completion memory:** when a quest completes, its giver gets a personal memory line
+  ("The player completed the quest you gave them…") — written from `main.on_quests_completed`
+  for world-triggered completions (e.g. lamps) and from `agent.act` when the giver is the
+  NPC currently talking.
+
+## Conventions / decisions
+- Per-NPC character files in `npc/characters/*.json` (personality, backstory, drives,
+  affinity seed). Per-NPC runtime memory is an append log; plan for summarization when it
+  grows.
+- Affinity is a numeric score the LLM nudges via `adjust_affinity {delta, reason}`;
+  category (hostile/wary/neutral/friendly) is derived.
+- **Oil is a real prerequisite:** lighting a lamp consumes an `oil_flask`; Wren reliably
+  grants 3 flasks with the starter quest (deterministic, not LLM-dependent). Content flavor
+  (NPCs *mentioning* oil) stays with the LLM; the mechanic stays in the engine.
+- Ask the user before big direction changes (new combat model, swapping the LLM
+  integration approach, major scope jumps).
+
+## Running
+```bash
+.venv/bin/python main.py
+```

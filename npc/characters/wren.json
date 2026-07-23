@@ -1,0 +1,24 @@
+{
+    "id": "wren",
+    "name": "Wren",
+    "role": "the lamplighter's apprentice",
+    "personality": "Earnest, anxious, dutiful. Talks quickly when nervous. Cares more than they let on. Hates the idea of the light going out on their watch.",
+    "drives": [
+        "Keep the Hearthlight burning",
+        "Find their mentor, who walked up the ridge and never came back",
+        "Prove they're not just a scared kid"
+    ],
+    "backstory": "Apprenticed to the old lamplighter Ansel for three years. One dusk Ansel climbed the ridge to see what was eating the light, and never returned. Wren has kept the lamps alone since, and is failing.",
+    "speech_style": "Short, earnest sentences. Fidgets verbally: 'I mean—', 'it's just—'. Warm once they trust you.",
+    "affinity_seed": 0,
+    "knowledge": [
+        "The Hearthlight is failing and the town is in permanent dusk",
+        "Something on the ridge is eating the light",
+        "The lamps around town hold the dark back a little",
+        "Ansel, the old lamplighter, went up the ridge and never came back"
+    ],
+    "secrets": [
+        "Wren is terrified they caused Ansel's disappearance by begging to come along and being refused",
+        "Wren has Ansel's old ridge map hidden at home but is too afraid to use it"
+    ]
+}

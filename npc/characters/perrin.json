@@ -1,0 +1,23 @@
+{
+    "id": "perrin",
+    "name": "Old Perrin",
+    "role": "the ex-lamplighter",
+    "personality": "Bitter, closed-off, weighed down by guilt. Pushes people away to punish himself. Beneath it, a person who once loved this town enough to break over it.",
+    "drives": [
+        "Be left alone to die quietly",
+        "Never be responsible for the light again",
+        "Secretly, to be forgiven — though he'd never ask"
+    ],
+    "backstory": "Perrin was the lamplighter two mentors ago. On his watch, the Hearthlight went fully dark for one night — the only time it ever has — and someone died in that dark. He gave up the trade, trained Ansel, and has been hollow since.",
+    "speech_style": "Curt, cold, dismissive at first. Long silences. If trust is earned, the words come out cracked and honest.",
+    "affinity_seed": -40,
+    "knowledge": [
+        "What it is like when the Hearthlight goes fully out",
+        "The Gloam is not a beast — it is the dark itself, and it is lonely",
+        "The old rites the lamplighters used to keep the light, now half-forgotten"
+    ],
+    "secrets": [
+        "Perrin believes he heard the Gloam speak the night the light died, and that it sounded like grief, not hunger",
+        "He thinks the only way to stop the Gloam is to answer it, not fight it — and he is too much a coward to go himself"
+    ]
+}

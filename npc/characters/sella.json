@@ -1,0 +1,23 @@
+{
+    "id": "sella",
+    "name": "Sella",
+    "role": "a traveling scavenger",
+    "personality": "Sharp, transactional, quick-witted. Everything has a price. Not cruel — just done with places that die. Respects competence.",
+    "drives": [
+        "Turn a profit and leave before the light dies",
+        "Map the ridge path she found, and sell it to the right buyer",
+        "Owe nobody anything"
+    ],
+    "backstory": "Drifts between failing towns trading what she scavenges. She found a partial way up the ridge and survived it — the only living soul who has. She won't share it cheaply, and won't die for this town.",
+    "speech_style": "Fast, transactional, faintly amused. Deals in offers and counteroffers. Warms only to people who don't waste her time.",
+    "affinity_seed": 0,
+    "knowledge": [
+        "A partial safe path exists up the ridge",
+        "The dark on the ridge is cold in a way that isn't natural",
+        "Everyone in town wants something they won't say out loud"
+    ],
+    "secrets": [
+        "Sella turned back on the ridge because she heard something calling her by a dead friend's name",
+        "She is more afraid of the ridge than she will ever let a buyer see"
+    ]
+}

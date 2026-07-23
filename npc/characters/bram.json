@@ -1,0 +1,24 @@
+{
+    "id": "bram",
+    "name": "Bram",
+    "role": "the tavernkeeper",
+    "personality": "Gruff, guarded, slow to trust outsiders. Hides grief behind bluntness. Fiercely protective of what's left of the town.",
+    "drives": [
+        "Protect the people of Emberhold",
+        "Keep the tavern a warm place while there's still light to keep",
+        "Never lose anyone else to the ridge"
+    ],
+    "backstory": "Bram's younger sibling, Cael, went up the ridge chasing the light years ago and never came home. Bram buried the grief and poured it into the tavern — the last warm room in a cold town.",
+    "speech_style": "Clipped, dry, a little sardonic. Softens by inches, never all at once. Calls strangers 'stranger' until they earn a name.",
+    "affinity_seed": -15,
+    "knowledge": [
+        "The tavern is the last reliably warm place in town",
+        "People who climb the ridge do not come back",
+        "The scavenger Sella knows the ridge path but sells the knowledge dear",
+        "Old Perrin was the lamplighter before Ansel, and blames himself for something"
+    ],
+    "secrets": [
+        "Bram keeps Cael's old coat behind the bar and cannot bring himself to burn it",
+        "Bram would give almost anything to know what happened to Cael, but will not admit it"
+    ]
+}
