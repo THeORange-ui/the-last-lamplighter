@@ -1,8 +1,11 @@
 """The player's journal overlay (toggle with J): quests + a log of what's happened."""
 from __future__ import annotations
 
+from collections import Counter
+
 import pygame
 
+from engine.items import display_name
 from ui import theme as T
 from ui.render import draw_text
 
@@ -37,6 +40,19 @@ def draw_journal(screen, world):
         draw_text(screen, f"• {q.title}  — done", (margin + 8, y),
                   T.font(16), T.TEXT_GOOD)
         y += 24
+
+    y += 12
+    draw_text(screen, "Items", (margin, y), T.font(19, bold=True), T.TEXT)
+    y += 28
+    counts = Counter(world.player.inventory)
+    if not counts:
+        draw_text(screen, "Your pack is empty.", (margin + 8, y), T.font(16), T.TEXT_DIM)
+        y += 24
+    else:
+        for item_id, n in counts.items():
+            label = display_name(item_id) + (f"  x{n}" if n > 1 else "")
+            draw_text(screen, f"• {label}", (margin + 8, y), T.font(16), T.TEXT)
+            y += 22
 
     y += 12
     draw_text(screen, "Log", (margin, y), T.font(19, bold=True), T.TEXT)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .items import ITEM_IDS
 from .quests import KnownEntities, Objective, Quest, Reward
 from .state import NPCRuntime, PlayerState, WorldState
 
@@ -18,8 +19,7 @@ TILE = 32
 GRID_W = 19
 GRID_H = 13
 
-# Items that exist in the world — actions/quests may only reference these.
-KNOWN_ITEMS = {"oil_flask", "old_key", "coin", "bread", "ridge_map"}
+# Items that exist in the world come from the item catalog (engine/items.py).
 INTERACTABLE_KINDS = {"lamp"}
 
 
@@ -114,7 +114,7 @@ def known_entities(rooms: dict[str, Room], npc_ids) -> KnownEntities:
     return KnownEntities(
         rooms=set(rooms.keys()) | {"ridge"},
         npcs=set(npc_ids),
-        items=set(KNOWN_ITEMS),
+        items=set(ITEM_IDS),
         interactable_kinds=set(INTERACTABLE_KINDS),
     )
 
@@ -135,9 +135,15 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
     rooms = build_rooms()
     npc_ids = list(NPC_SPAWNS.keys())
 
+    from npc.roster import load_character  # local import: avoids engine→npc coupling
+
     npcs: dict[str, NPCRuntime] = {}
     for nid, (room, x, y) in NPC_SPAWNS.items():
-        npcs[nid] = NPCRuntime(npc_id=nid, room=room, x=x, y=y)
+        try:
+            seed_inv = list(load_character(nid).get("inventory", []))
+        except KeyError:
+            seed_inv = []
+        npcs[nid] = NPCRuntime(npc_id=nid, room=room, x=x, y=y, inventory=seed_inv)
 
     lamps: dict[str, bool] = {}
     for room in rooms.values():

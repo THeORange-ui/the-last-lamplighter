@@ -14,6 +14,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from engine.items import catalog_for_prompt, display_name
 from engine.quests import refresh_and_complete
 from engine.state import affinity_label
 from llm.client import LLMError, complete_json
@@ -70,9 +71,13 @@ def _world_briefing(world, rooms, known, npc_id) -> str:
         + ", ".join(f"{r.id} ({r.name})" for r in rooms.values()),
         "People in the world (use the id): "
         + ", ".join(sorted(known.npcs)),
-        "Items that exist (only reference these): "
-        + ", ".join(sorted(known.items)),
         "Interactable kinds for quests: " + ", ".join(sorted(known.interactable_kinds)),
+        "",
+        "The only items that exist (reference these ids, never invent others):\n"
+        + catalog_for_prompt(),
+        "",
+        "You are carrying (you may offer any of these, and only these): "
+        + (", ".join(display_name(i) + f" ({i})" for i in npc.inventory) or "nothing"),
     ]
     if world.active_quests():
         lines.append(

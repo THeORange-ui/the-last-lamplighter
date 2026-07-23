@@ -34,6 +34,7 @@ class NPCRuntime:
     y: int
     affinity: int = 0            # -100..100 toward the player
     talked_to: bool = False
+    inventory: list[str] = field(default_factory=list)   # item ids this NPC holds
     flags: dict = field(default_factory=dict)
 
     @property

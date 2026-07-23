@@ -56,7 +56,8 @@ def save_game(state: WorldState, path: Path = SAVE_PATH) -> None:
         "player": {"room": state.player.room, "x": state.player.x, "y": state.player.y,
                    "inventory": list(state.player.inventory)},
         "npcs": {nid: {"room": n.room, "x": n.x, "y": n.y, "affinity": n.affinity,
-                       "talked_to": n.talked_to, "flags": n.flags}
+                       "talked_to": n.talked_to, "inventory": list(n.inventory),
+                       "flags": n.flags}
                  for nid, n in state.npcs.items()},
         "lamps": dict(state.lamps),
         "quests": [_quest_to_dict(q) for q in state.quests],
@@ -82,6 +83,7 @@ def load_game(path: Path = SAVE_PATH) -> WorldState:
         npcs[nid] = NPCRuntime(npc_id=nid, room=n["room"], x=n["x"], y=n["y"],
                                affinity=n.get("affinity", 0),
                                talked_to=n.get("talked_to", False),
+                               inventory=list(n.get("inventory", [])),
                                flags=n.get("flags", {}))
 
     log = EventLog()

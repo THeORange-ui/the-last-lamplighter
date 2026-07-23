@@ -151,11 +151,16 @@ class Game:
         # and reliably supplies the oil needed to light the lamps.
         if npc_id == "wren" and not self.world.has_quest("relight_the_lamps"):
             self.world.quests.append(starter_quest())
-            self.world.player.inventory.extend(["oil_flask", "oil_flask", "oil_flask"])
+            wren = self.world.npcs["wren"]
+            moved = 0
+            while moved < 3 and "oil_flask" in wren.inventory:
+                wren.inventory.remove("oil_flask")
+                self.world.player.inventory.append("oil_flask")
+                moved += 1
             self.world.events.record(
                 "quest_start", "Wren asked you to relight the three lamps and gave you oil."
             )
-            self.set_toast("New quest: Relight the Lamps  (+3 oil)")
+            self.set_toast(f"New quest: Relight the Lamps  (+{moved} oil)")
         self.dialogue = DialogueBox(
             self.world, self.rooms, self.known, npc_id, self.memory_for(npc_id)
         )

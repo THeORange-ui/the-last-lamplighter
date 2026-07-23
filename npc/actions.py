@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from engine.items import display_name
 from engine.quests import QuestValidationError, build_quest
 from engine.world import GRID_H, GRID_W, Room
 from npc.roster import character_name
@@ -27,8 +28,9 @@ your character would actually do this turn. Each is a JSON object in "actions":
                      "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},
        "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}
     Offer a task. The target MUST be a real entity listed in the world briefing.
-- {"type": "offer_item", "item": "<item id from the world briefing>"}
-    Hand the player an item you plausibly have.
+- {"type": "offer_item", "item": "<item id you are CARRYING>"}
+    Hand the player one item from your own inventory (listed in the briefing).
+    You cannot give what you do not carry.
 - {"type": "reveal_fact", "fact": "<a concrete fact you disclose>"}
     Share something true about the world/your past. Recorded to memory.
 - {"type": "move_to", "room": "<room id>"}
@@ -96,14 +98,19 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
 
         elif atype == "offer_item":
             item = str(raw.get("item", "")).strip()
+            npc_inv = state.npcs[npc_id].inventory
             if item not in known.items:
                 result.debug.append(f"dropped offer of unknown item {item!r}")
                 continue
+            if item not in npc_inv:
+                # The NPC can only give what it actually holds — no inventing items.
+                result.debug.append(f"{npc_id} tried to offer {item!r} it doesn't have")
+                continue
+            npc_inv.remove(item)
             state.player.inventory.append(item)
-            state.events.record(
-                "item_get", f"{name} gave you {item.replace('_', ' ')}.", public=False
-            )
-            result.effects.append(f"{name} gives you: {item.replace('_', ' ')}.")
+            label = display_name(item)
+            state.events.record("item_get", f"{name} gave you the {label}.", public=False)
+            result.effects.append(f"{name} gives you: {label}.")
 
         elif atype == "reveal_fact":
             fact = str(raw.get("fact", "")).strip()
