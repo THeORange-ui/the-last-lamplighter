@@ -10,6 +10,7 @@ import sys
 import pygame
 
 from engine.quests import refresh_and_complete
+from engine.save import load_game, save_exists, save_game, wipe_save
 from engine.world import new_world, starter_quest
 from npc.memory import NPCMemory
 from npc.roster import character_name
@@ -34,12 +35,20 @@ class Game:
     def __init__(self, fresh: bool = False):
         if fresh:
             NPCMemory.wipe_all()
+            wipe_save()
         pygame.init()
         pygame.display.set_caption("The Last Lamplighter")
         self.screen = pygame.display.set_mode((T.SCREEN_W, T.SCREEN_H))
         self.clock = pygame.time.Clock()
 
         self.world, self.rooms, self.known = new_world()
+        self.loaded_save = False
+        if not fresh and save_exists():
+            try:
+                self.world = load_game()
+                self.loaded_save = True
+            except (ValueError, KeyError, OSError) as e:
+                print(f"Could not load save ({e}); starting fresh.")
         self.memories: dict[str, NPCMemory] = {}
         self.scene = "intro"          # intro | overworld | dialogue
         self.dialogue: DialogueBox | None = None
@@ -160,6 +169,7 @@ class Game:
             self.update(dt)
             self.draw()
             pygame.display.flip()
+        save_game(self.world)
         pygame.quit()
 
     def handle_events(self):
@@ -169,6 +179,8 @@ class Game:
             elif self.scene == "intro":
                 if event.type == pygame.KEYDOWN:
                     self.scene = "overworld"
+                    if self.loaded_save:
+                        self.set_toast("Progress restored.")
             elif self.scene == "dialogue":
                 if self.dialogue:
                     self.dialogue.handle_event(event)
