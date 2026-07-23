@@ -119,6 +119,22 @@ def known_entities(rooms: dict[str, Room], npc_ids) -> KnownEntities:
     )
 
 
+def ensure_world_complete(state: WorldState) -> None:
+    """Add any NPCs/lamps introduced since a save was written (forward-compat)."""
+    from npc.roster import load_character
+
+    for nid, (room, x, y) in NPC_SPAWNS.items():
+        if nid not in state.npcs:
+            try:
+                inv = list(load_character(nid).get("inventory", []))
+            except KeyError:
+                inv = []
+            state.npcs[nid] = NPCRuntime(npc_id=nid, room=room, x=x, y=y, inventory=inv)
+    for room in build_rooms().values():
+        for lamp_id in room.lamps:
+            state.lamps.setdefault(lamp_id, False)
+
+
 def starter_quest() -> Quest:
     """The single authored quest: Wren asks you to relight three lamps."""
     return Quest(

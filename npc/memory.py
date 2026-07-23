@@ -94,3 +94,34 @@ class NPCMemory:
         if MEMORY_DIR.exists():
             for f in MEMORY_DIR.glob("*.json"):
                 f.unlink()
+
+    @staticmethod
+    def snapshot_all() -> dict:
+        """Read every NPC's current memory into {npc_id: {summary, entries}}.
+
+        Reflects the on-disk working memory (write-through per turn), so this is a
+        faithful capture for bundling into a save.
+        """
+        out: dict[str, dict] = {}
+        if not MEMORY_DIR.exists():
+            return out
+        for f in MEMORY_DIR.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if isinstance(data, list):
+                data = {"summary": "", "entries": data}
+            out[f.stem] = {"summary": data.get("summary", ""),
+                           "entries": data.get("entries", [])}
+        return out
+
+    @staticmethod
+    def restore_all(memories: dict) -> None:
+        """Replace working memory with the given snapshot (used on load)."""
+        NPCMemory.wipe_all()
+        MEMORY_DIR.mkdir(exist_ok=True)
+        for npc_id, data in (memories or {}).items():
+            payload = {"summary": data.get("summary", ""),
+                       "entries": data.get("entries", [])}
+            (MEMORY_DIR / f"{npc_id}.json").write_text(json.dumps(payload, indent=2))

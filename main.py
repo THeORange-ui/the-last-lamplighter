@@ -10,13 +10,15 @@ import sys
 import pygame
 
 from engine.quests import refresh_and_complete
-from engine.save import load_game, save_exists, save_game, wipe_save
-from engine.world import new_world, starter_quest
+from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
+                         wipe_all_saves)
+from engine.world import ensure_world_complete, new_world, starter_quest
 from npc.memory import NPCMemory
 from npc.roster import character_name
 from ui import theme as T
 from ui.dialogue import DialogueBox
 from ui.journal import draw_journal
+from ui.menu import Menu
 from ui.render import draw_hud, draw_overworld, draw_text
 
 MOVE_DELAY = 0.12   # seconds between grid steps while a direction is held
@@ -35,24 +37,33 @@ class Game:
     def __init__(self, fresh: bool = False):
         if fresh:
             NPCMemory.wipe_all()
-            wipe_save()
+            wipe_all_saves()
         pygame.init()
         pygame.display.set_caption("The Last Lamplighter")
         self.screen = pygame.display.set_mode((T.SCREEN_W, T.SCREEN_H))
         self.clock = pygame.time.Clock()
 
         self.world, self.rooms, self.known = new_world()
+        self.save_name = AUTOSAVE
         self.loaded_save = False
-        if not fresh and save_exists():
+        continue_slot = None if fresh else latest_save()
+        if continue_slot:
             try:
-                self.world = load_game()
+                world, mems = load_bundle(continue_slot)
+                NPCMemory.restore_all(mems)
+                ensure_world_complete(world)
+                self.world = world
+                self.save_name = continue_slot
                 self.loaded_save = True
             except (ValueError, KeyError, OSError) as e:
                 print(f"Could not load save ({e}); starting fresh.")
+
         self.memories: dict[str, NPCMemory] = {}
+        self.menu = Menu()
         self.scene = "intro"          # intro | overworld | dialogue
         self.dialogue: DialogueBox | None = None
         self.journal_open = False
+        self.menu_open = False
         self.move_timer = 0.0
         self.toast = ""
         self.toast_timer = 0.0
@@ -62,6 +73,40 @@ class Game:
         if npc_id not in self.memories:
             self.memories[npc_id] = NPCMemory(npc_id)
         return self.memories[npc_id]
+
+    # --- persistence ------------------------------------------------------
+    def do_save(self, name: str) -> None:
+        save_bundle(self.world, NPCMemory.snapshot_all(), name)
+        self.save_name = name
+
+    def do_load(self, name: str) -> None:
+        world, mems = load_bundle(name)
+        NPCMemory.restore_all(mems)
+        ensure_world_complete(world)
+        self.world = world
+        self.memories = {}            # drop cache so live memory reloads from disk
+        self.save_name = name
+        self.menu_open = False
+        self.scene = "overworld"
+        self.dialogue = None
+        self.set_toast(f"Loaded “{name}”.")
+
+    def handle_menu_command(self, cmd: dict) -> None:
+        action = cmd.get("cmd")
+        if action == "close":
+            self.menu_open = False
+        elif action == "save":
+            self.do_save(self.save_name)
+            self.set_toast(f"Saved to “{self.save_name}”.")
+        elif action == "save_as":
+            self.do_save(cmd["name"])
+            self.menu.mode = "main"
+            self.set_toast(f"Saved as “{self.save_name}”.")
+        elif action == "load":
+            self.do_load(cmd["name"])
+        elif action == "save_quit":
+            self.do_save(self.save_name)
+            self.running = False
 
     def set_toast(self, text: str):
         self.toast = text
@@ -174,13 +219,17 @@ class Game:
             self.update(dt)
             self.draw()
             pygame.display.flip()
-        save_game(self.world)
+        self.do_save(self.save_name)   # safety autosave on exit
         pygame.quit()
 
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif self.menu_open:
+                cmd = self.menu.handle_event(event)
+                if cmd:
+                    self.handle_menu_command(cmd)
             elif self.scene == "intro":
                 if event.type == pygame.KEYDOWN:
                     self.scene = "overworld"
@@ -190,19 +239,24 @@ class Game:
                 if self.dialogue:
                     self.dialogue.handle_event(event)
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_j:
-                    self.journal_open = not self.journal_open
-                elif event.key == pygame.K_ESCAPE:
+                if event.key == pygame.K_ESCAPE:
                     if self.journal_open:
                         self.journal_open = False
                     else:
-                        self.running = False
+                        self.menu.open()
+                        self.menu_open = True
+                elif event.key == pygame.K_j:
+                    self.journal_open = not self.journal_open
                 elif not self.journal_open and event.key in INTERACT_KEYS:
                     self.interact()
 
     def update(self, dt):
         if self.toast_timer > 0:
             self.toast_timer -= dt
+
+        if self.menu_open:
+            self.menu.update(dt)
+            return
 
         if self.scene == "overworld" and not self.journal_open:
             self.move_timer -= dt
@@ -234,6 +288,8 @@ class Game:
 
         if self.journal_open:
             draw_journal(self.screen, self.world)
+        if self.menu_open:
+            self.menu.draw(self.screen, self.save_name)
 
         if self.toast_timer > 0:
             self.draw_toast()
@@ -262,7 +318,7 @@ class Game:
             "",
             "Talk to them. Help them, or don't. Find your way to the ridge.",
             "",
-            "Move: Arrows / WASD    Interact: E    Journal: J    Quit: Esc",
+            "Move: Arrows / WASD    Interact: E    Journal: J    Menu: Esc",
             "",
             "Press any key to begin.",
         ]

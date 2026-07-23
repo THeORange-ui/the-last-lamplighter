@@ -83,10 +83,14 @@ the api_key in logs or commits.
   grows.
 - Affinity is a numeric score the LLM nudges via `adjust_affinity {delta, reason}`;
   category (hostile/wary/neutral/friendly) is derived.
-- **Persistence:** full `WorldState` autosaves to `save/game.json` on quit and reloads
-  on start (per-NPC memory persists separately in `runtime_memory/`). `main.py --fresh`
-  wipes both. Memory files are `{summary, entries}`; the log auto-compacts via the LLM
-  once it grows past a threshold (compaction runs in the dialogue worker thread).
+- **Persistence:** named save slots under `save/<name>.json`, each a bundle of the full
+  `WorldState` **plus every NPC's memory** (and NPC inventories), so a slot fully restores
+  a session. The in-game menu (**Esc**, `ui/menu.py`) offers Continue/Save/Load/Save As/
+  Save and Quit; the game continues from the most-recently-modified slot on launch and
+  autosaves to the current slot on exit. `runtime_memory/` is the live working copy
+  (write-through per turn); `NPCMemory.snapshot_all/restore_all` move it in/out of slots.
+  `main.py --fresh` wipes all saves + memory. Memory files are `{summary, entries}`; the
+  log auto-compacts via the LLM past a threshold (in the dialogue worker thread).
 - **Sprites** are built procedurally at low res and nearest-scaled (`ui/sprites.py`),
   tinted per character; no binary art assets are committed.
 - **Oil is a real prerequisite:** lighting a lamp consumes an `oil_flask`; Wren reliably

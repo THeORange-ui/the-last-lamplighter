@@ -32,10 +32,14 @@ cp settings.example.json settings.json   # then fill in your endpoint
 .venv/bin/python main.py --fresh    # wipe NPC memory and start clean
 ```
 
-Move with **Arrows/WASD**, interact with **E**, open the journal with **J**, quit
-with **Esc**. Walk up to an NPC and press E to talk; type freely; press Enter to
-send. Progress **autosaves on quit** and reloads next launch (use `--fresh` to
-wipe the save and all NPC memory).
+Move with **Arrows/WASD**, interact with **E**, open the journal with **J**, open
+the **menu** with **Esc** (Continue / Save / Load / Save As / Save and Quit). Walk
+up to an NPC and press E to talk; type freely; press Enter to send.
+
+Saves are named slots under `save/` — each one bundles the whole world *and* every
+NPC's memory, so loading a slot restores the relationships and conversations exactly
+as they were. The game continues from your most recent slot on launch and autosaves
+on exit; `--fresh` wipes all saves and memory.
 
 ## How it fits together
 

@@ -15,17 +15,49 @@ from engine.state import NPCRuntime, PlayerState, WorldState
 
 ROOT = Path(__file__).resolve().parent.parent
 SAVE_DIR = ROOT / "save"
-SAVE_PATH = SAVE_DIR / "game.json"
-SAVE_VERSION = 1
+AUTOSAVE = "autosave"        # default slot for new games / quick continue
+SAVE_VERSION = 2
 
 
-def save_exists(path: Path = SAVE_PATH) -> bool:
-    return path.exists()
+def _sanitize(name: str) -> str:
+    keep = [c if (c.isalnum() or c in " -_") else "_" for c in name.strip()]
+    return ("".join(keep).strip() or "save")[:40]
 
 
-def wipe_save(path: Path = SAVE_PATH) -> None:
-    if path.exists():
-        path.unlink()
+def slot_path(name: str) -> Path:
+    return SAVE_DIR / f"{_sanitize(name)}.json"
+
+
+def save_exists(name: str = AUTOSAVE) -> bool:
+    return slot_path(name).exists()
+
+
+def list_saves() -> list[str]:
+    if not SAVE_DIR.exists():
+        return []
+    return sorted(p.stem for p in SAVE_DIR.glob("*.json"))
+
+
+def latest_save() -> str | None:
+    """Most recently modified slot name, for 'continue' on startup."""
+    if not SAVE_DIR.exists():
+        return None
+    files = list(SAVE_DIR.glob("*.json"))
+    if not files:
+        return None
+    return max(files, key=lambda p: p.stat().st_mtime).stem
+
+
+def delete_save(name: str) -> None:
+    p = slot_path(name)
+    if p.exists():
+        p.unlink()
+
+
+def wipe_all_saves() -> None:
+    if SAVE_DIR.exists():
+        for p in SAVE_DIR.glob("*.json"):
+            p.unlink()
 
 
 # --- serialization -----------------------------------------------------------
@@ -50,9 +82,8 @@ def _quest_from_dict(d: dict) -> Quest:
     )
 
 
-def save_game(state: WorldState, path: Path = SAVE_PATH) -> None:
-    data = {
-        "version": SAVE_VERSION,
+def _world_to_dict(state: WorldState) -> dict:
+    return {
         "player": {"room": state.player.room, "x": state.player.x, "y": state.player.y,
                    "inventory": list(state.player.inventory)},
         "npcs": {nid: {"room": n.room, "x": n.x, "y": n.y, "affinity": n.affinity,
@@ -68,12 +99,9 @@ def save_game(state: WorldState, path: Path = SAVE_PATH) -> None:
                    "list": [{"seq": e.seq, "kind": e.kind, "text": e.text,
                              "public": e.public} for e in state.events.events]},
     }
-    SAVE_DIR.mkdir(exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
 
 
-def load_game(path: Path = SAVE_PATH) -> WorldState:
-    data = json.loads(path.read_text())
+def _world_from_dict(data: dict) -> WorldState:
     p = data["player"]
     player = PlayerState(room=p["room"], x=p["x"], y=p["y"],
                          inventory=list(p.get("inventory", [])))
@@ -102,3 +130,20 @@ def load_game(path: Path = SAVE_PATH) -> WorldState:
         hearthlight=data.get("hearthlight", 60),
         events=log,
     )
+
+
+def save_bundle(state: WorldState, memories: dict, name: str = AUTOSAVE) -> None:
+    """Write a save slot: full world state + all NPC memories."""
+    bundle = {"version": SAVE_VERSION, "world": _world_to_dict(state),
+              "memories": memories or {}}
+    SAVE_DIR.mkdir(exist_ok=True)
+    slot_path(name).write_text(json.dumps(bundle, indent=2))
+
+
+def load_bundle(name: str = AUTOSAVE) -> tuple[WorldState, dict]:
+    """Load a save slot, returning (WorldState, memories). Reads v1 world-only
+    files too (memories come back empty)."""
+    data = json.loads(slot_path(name).read_text())
+    if "world" in data:                       # v2 bundle
+        return _world_from_dict(data["world"]), data.get("memories", {})
+    return _world_from_dict(data), {}         # legacy v1: bare world dict

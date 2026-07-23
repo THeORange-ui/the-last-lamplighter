@@ -122,5 +122,5 @@ def draw_hud(screen, world, rooms, hint=""):
         draw_text(screen, hint, (T.SCREEN_W - 14, T.PLAY_H + 50),
                   T.font(15, bold=True), T.TEXT_GOOD, right=True)
     else:
-        draw_text(screen, "WASD move · E interact · J journal · Esc quit",
+        draw_text(screen, "WASD move · E interact · J journal · Esc menu",
                   (T.SCREEN_W - 14, T.PLAY_H + 50), T.font(13), T.TEXT_DIM, right=True)
