@@ -11,7 +11,7 @@ from pathlib import Path
 
 from engine.journal import Event, EventLog
 from engine.quests import Objective, Quest, Reward
-from engine.state import NPCRuntime, PlayerState, WorldState
+from engine.state import GroundItem, NPCRuntime, PlayerState, WorldState
 
 ROOT = Path(__file__).resolve().parent.parent
 SAVE_DIR = ROOT / "save"
@@ -85,7 +85,8 @@ def _quest_from_dict(d: dict) -> Quest:
 def _world_to_dict(state: WorldState) -> dict:
     return {
         "player": {"room": state.player.room, "x": state.player.x, "y": state.player.y,
-                   "inventory": list(state.player.inventory)},
+                   "inventory": list(state.player.inventory),
+                   "hp": state.player.hp, "max_hp": state.player.max_hp},
         "npcs": {nid: {"room": n.room, "x": n.x, "y": n.y, "affinity": n.affinity,
                        "talked_to": n.talked_to, "inventory": list(n.inventory),
                        "flags": n.flags}
@@ -98,13 +99,16 @@ def _world_to_dict(state: WorldState) -> dict:
         "events": {"seq": state.events._seq,
                    "list": [{"seq": e.seq, "kind": e.kind, "text": e.text,
                              "public": e.public} for e in state.events.events]},
+        "ground_items": [{"room": g.room, "x": g.x, "y": g.y, "item": g.item}
+                         for g in state.ground_items],
     }
 
 
 def _world_from_dict(data: dict) -> WorldState:
     p = data["player"]
     player = PlayerState(room=p["room"], x=p["x"], y=p["y"],
-                         inventory=list(p.get("inventory", [])))
+                         inventory=list(p.get("inventory", [])),
+                         hp=p.get("hp", 20), max_hp=p.get("max_hp", 20))
 
     npcs: dict[str, NPCRuntime] = {}
     for nid, n in data.get("npcs", {}).items():
@@ -120,6 +124,9 @@ def _world_from_dict(data: dict) -> WorldState:
     log.events = [Event(seq=e["seq"], kind=e["kind"], text=e["text"],
                         public=e.get("public", True)) for e in ev.get("list", [])]
 
+    ground = [GroundItem(room=g["room"], x=g["x"], y=g["y"], item=g["item"])
+              for g in data.get("ground_items", [])]
+
     return WorldState(
         player=player,
         npcs=npcs,
@@ -129,6 +136,7 @@ def _world_from_dict(data: dict) -> WorldState:
         world_facts=data.get("world_facts", []),
         hearthlight=data.get("hearthlight", 60),
         events=log,
+        ground_items=ground,
     )
 
 

@@ -9,14 +9,17 @@ import sys
 
 import pygame
 
+from engine.items import display_name, use_item
 from engine.quests import refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
+from engine.state import GroundItem
 from engine.world import ensure_world_complete, new_world, starter_quest
 from npc.memory import NPCMemory
 from npc.roster import character_name
 from ui import theme as T
 from ui.dialogue import DialogueBox
+from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
 from ui.menu import Menu
 from ui.render import draw_hud, draw_overworld, draw_text
@@ -64,6 +67,8 @@ class Game:
         self.dialogue: DialogueBox | None = None
         self.journal_open = False
         self.menu_open = False
+        self.inventory_open = False
+        self.inv_panel: InventoryPanel | None = None
         self.move_timer = 0.0
         self.toast = ""
         self.toast_timer = 0.0
@@ -107,6 +112,22 @@ class Game:
         elif action == "save_quit":
             self.do_save(self.save_name)
             self.running = False
+
+    def handle_inventory_command(self, cmd: dict) -> None:
+        action = cmd.get("cmd")
+        if action == "close":
+            self.inventory_open = False
+        elif action == "use":
+            item = cmd["item"]
+            result = use_item(self.world, item)
+            if result.consumed:
+                self.world.consume_item(item)
+            if self.inv_panel:
+                self.inv_panel.message = result.message
+        elif action == "drop":
+            self.drop_item(cmd["item"])
+            if self.inv_panel:
+                self.inv_panel.message = f"Dropped {display_name(cmd['item'])}."
 
     def set_toast(self, text: str):
         self.toast = text
@@ -168,11 +189,44 @@ class Game:
             self.world.events.record(
                 "arrive", f"You entered {self.rooms[p.room].name}.", public=False
             )
+            self.try_pickup()
             self.on_quests_completed(refresh_and_complete(self.world))  # "reach" objectives
             return
         if (tx, ty) in room.blocked() or self.occupied(tx, ty):
             return
         p.x, p.y = tx, ty
+        self.try_pickup()
+
+    def try_pickup(self):
+        p = self.world.player
+        g = self.world.ground_item_at(p.room, p.x, p.y)
+        if g:
+            self.world.ground_items.remove(g)
+            p.inventory.append(g.item)
+            self.set_toast(f"Picked up: {display_name(g.item)}.")
+
+    def drop_item(self, item: str):
+        """Drop one of an item onto a free tile near the player."""
+        p = self.world.player
+        if item not in p.inventory:
+            return
+        room = self.rooms[p.room]
+        blocked = room.blocked()
+        spot = None
+        for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)):
+            tx, ty = p.x + dx, p.y + dy
+            if (tx, ty) in blocked or self.occupied(tx, ty):
+                continue
+            if self.world.ground_item_at(p.room, tx, ty):
+                continue
+            spot = (tx, ty)
+            break
+        if spot is None:
+            self.set_toast("No room to drop that here.")
+            return
+        p.inventory.remove(item)
+        self.world.ground_items.append(GroundItem(p.room, spot[0], spot[1], item))
+        self.set_toast(f"Dropped: {display_name(item)}.")
 
     def interact(self):
         kind, ident = self.adjacent_targets()
@@ -230,6 +284,10 @@ class Game:
                 cmd = self.menu.handle_event(event)
                 if cmd:
                     self.handle_menu_command(cmd)
+            elif self.inventory_open:
+                cmd = self.inv_panel.handle_event(event)
+                if cmd:
+                    self.handle_inventory_command(cmd)
             elif self.scene == "intro":
                 if event.type == pygame.KEYDOWN:
                     self.scene = "overworld"
@@ -247,6 +305,9 @@ class Game:
                         self.menu_open = True
                 elif event.key == pygame.K_j:
                     self.journal_open = not self.journal_open
+                elif event.key == pygame.K_i and not self.journal_open:
+                    self.inv_panel = InventoryPanel(self.world)
+                    self.inventory_open = True
                 elif not self.journal_open and event.key in INTERACT_KEYS:
                     self.interact()
 
@@ -256,6 +317,8 @@ class Game:
 
         if self.menu_open:
             self.menu.update(dt)
+            return
+        if self.inventory_open:
             return
 
         if self.scene == "overworld" and not self.journal_open:
@@ -288,6 +351,8 @@ class Game:
 
         if self.journal_open:
             draw_journal(self.screen, self.world)
+        if self.inventory_open and self.inv_panel:
+            self.inv_panel.draw(self.screen)
         if self.menu_open:
             self.menu.draw(self.screen, self.save_name)
 
@@ -318,7 +383,7 @@ class Game:
             "",
             "Talk to them. Help them, or don't. Find your way to the ridge.",
             "",
-            "Move: Arrows / WASD    Interact: E    Journal: J    Menu: Esc",
+            "Move: WASD   Interact: E   Inventory: I   Journal: J   Menu: Esc",
             "",
             "Press any key to begin.",
         ]

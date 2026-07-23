@@ -11,7 +11,8 @@
     "backstory": "Drifts between failing towns trading what she scavenges. She found a partial way up the ridge and survived it — the only living soul who has. She won't share it cheaply, and won't die for this town.",
     "speech_style": "Fast, transactional, faintly amused. Deals in offers and counteroffers. Warms only to people who don't waste her time.",
     "affinity_seed": 0,
-    "inventory": ["scrap", "scrap", "old_key", "coin", "coin", "tonic"],
+    "inventory": ["scrap", "scrap", "old_key", "tonic",
+                  "coin", "coin", "coin", "coin", "coin", "coin", "coin", "coin"],
     "knowledge": [
         "A partial safe path exists up the ridge",
         "The dark on the ridge is cold in a way that isn't natural",

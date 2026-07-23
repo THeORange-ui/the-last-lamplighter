@@ -48,6 +48,16 @@ class PlayerState:
     x: int
     y: int
     inventory: list[str] = field(default_factory=list)
+    hp: int = 20
+    max_hp: int = 20
+
+
+@dataclass
+class GroundItem:
+    room: str
+    x: int
+    y: int
+    item: str
 
 
 @dataclass
@@ -60,6 +70,7 @@ class WorldState:
     world_facts: list[str] = field(default_factory=list)    # facts revealed in play
     hearthlight: int = 60                                    # the failing lantern, 0..100
     events: EventLog = field(default_factory=EventLog)      # shared world event log
+    ground_items: list = field(default_factory=list)        # list[GroundItem]
 
     # --- inventory --------------------------------------------------------
     def has_item(self, item: str) -> bool:
@@ -70,6 +81,21 @@ class WorldState:
             self.player.inventory.remove(item)
             return True
         return False
+
+    # --- player vitals ----------------------------------------------------
+    def heal_player(self, amount: int) -> int:
+        """Heal up to max_hp; returns HP actually restored."""
+        before = self.player.hp
+        self.player.hp = min(self.player.max_hp, self.player.hp + max(0, amount))
+        return self.player.hp - before
+
+    # --- ground items -----------------------------------------------------
+    def ground_items_in(self, room: str) -> list:
+        return [g for g in self.ground_items if g.room == room]
+
+    def ground_item_at(self, room: str, x: int, y: int):
+        return next((g for g in self.ground_items
+                     if g.room == room and g.x == x and g.y == y), None)
 
     # --- affinity ---------------------------------------------------------
     def adjust_affinity(self, npc_id: str, delta: int) -> int:

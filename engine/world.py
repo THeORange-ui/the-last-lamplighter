@@ -186,7 +186,7 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
             lamps[lamp_id] = False  # all start dead
 
     state = WorldState(
-        player=PlayerState(room="square", x=9, y=8),
+        player=PlayerState(room="square", x=9, y=8, inventory=["coin"] * 5),
         npcs=npcs,
         lamps=lamps,
     )

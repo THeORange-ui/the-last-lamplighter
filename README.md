@@ -32,9 +32,16 @@ cp settings.example.json settings.json   # then fill in your endpoint
 .venv/bin/python main.py --fresh    # wipe NPC memory and start clean
 ```
 
-Move with **Arrows/WASD**, interact with **E**, open the journal with **J**, open
-the **menu** with **Esc** (Continue / Save / Load / Save As / Save and Quit). Walk
-up to an NPC and press E to talk; type freely; press Enter to send.
+Move with **Arrows/WASD**, interact with **E**, open your **inventory** with **I**,
+the **journal** with **J**, and the **menu** with **Esc** (Continue / Save / Load /
+Save As / Save and Quit). Walk up to an NPC and press E to talk; type freely; press
+Enter to send.
+
+In the inventory you can **Use** items (read the ridge map, eat food to heal) or
+**Drop** them on the ground. Press **I** *during a conversation* to open a trade view
+with both inventories: **Gift** or **Sell** your items, **Ask for** or **Buy** theirs.
+Gifting and asking go through the NPC's own judgement; buying and selling use coins at
+fixed catalog prices.
 
 Saves are named slots under `save/` — each one bundles the whole world *and* every
 NPC's memory, so loading a slot restores the relationships and conversations exactly

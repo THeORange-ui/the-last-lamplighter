@@ -80,6 +80,26 @@ the api_key in logs or commits.
   for world-triggered completions (e.g. lamps) and from `agent.act` when the giver is the
   NPC currently talking.
 
+## Items, inventory & economy
+- **Catalog** (`engine/items.py`) is the closed set of real items — each with a display
+  name, description, coin `value`, and optional `use` behavior (`eat`/`drink` heal player
+  HP, `read` shows text, `key`). `use_item()` applies effects. Nothing off-catalog exists.
+- **Player HP** lives on `PlayerState` (hp/max_hp); food heals it. Seeds M2 combat.
+- **Inventory screen** — press **I** in the overworld (`ui/inventory.py: InventoryPanel`):
+  browse items, Use or Drop them. Dropped items become **ground items**
+  (`WorldState.ground_items`, rendered on the floor) that are picked up by walking onto
+  them.
+- **In-dialogue trade** — press **I** while talking (`TradePanel`): shows both inventories.
+  On your items: **Gift** / **Sell**. On theirs: **Ask for** / **Buy**.
+    - Gift and Ask route through the NPC's AI (they react in character; Ask lets them decide
+      via `offer_item`) — on-theme with the AI-driven design.
+    - Buy/Sell are **mechanical** at catalog `value` (`engine/trade.py`), so the economy is
+      deterministic and trackable. Coins are `coin` items; NPCs and the player hold coin
+      balances (player starts with a small purse). Currency is hidden from the actionable
+      item lists (wallet total shows in the header).
+    - In dialogue, **I** opens trade only when the input line is empty (so `i` can still be
+      typed mid-message).
+
 ## Conventions / decisions
 - Per-NPC character files in `npc/characters/*.json` (personality, backstory, drives,
   affinity seed). Per-NPC runtime memory is an append log; plan for summarization when it

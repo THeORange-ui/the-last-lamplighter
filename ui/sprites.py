@@ -74,6 +74,33 @@ def actor_surface(key: str) -> pygame.Surface:
     return _cache[key]
 
 
+_ITEM_TINT = {
+    "coin": (240, 205, 90),
+    "bread": (206, 160, 96),
+    "tavern_stew": (198, 138, 84),
+    "tonic": (150, 210, 180),
+    "ridge_map": (222, 208, 168),
+    "old_key": (176, 176, 190),
+    "oil_flask": (150, 196, 255),
+    "scrap": (150, 146, 150),
+}
+
+
+def item_icon(item_id: str) -> pygame.Surface:
+    """A small ground/inventory icon for an item (cached)."""
+    key = f"__item_{item_id}"
+    if key in _cache:
+        return _cache[key]
+    tint = _ITEM_TINT.get(item_id, (200, 200, 210))
+    s = pygame.Surface((10, 10), pygame.SRCALPHA)
+    pygame.draw.rect(s, OUTLINE, (1, 1, 8, 8), border_radius=2)
+    pygame.draw.rect(s, tint, (2, 2, 6, 6), border_radius=2)
+    pygame.draw.rect(s, (255, 255, 255), (3, 3, 2, 2))   # highlight
+    big = pygame.transform.scale(s, (20, 20))
+    _cache[key] = big
+    return big
+
+
 def lamp_surface(lit: bool) -> pygame.Surface:
     key = f"__lamp_{lit}"
     if key in _cache:

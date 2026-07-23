@@ -11,7 +11,7 @@
     "backstory": "Bram's younger sibling, Cael, went up the ridge chasing the light years ago and never came home. Bram buried the grief and poured it into the tavern — the last warm room in a cold town.",
     "speech_style": "Clipped, dry, a little sardonic. Softens by inches, never all at once. Calls strangers 'stranger' until they earn a name.",
     "affinity_seed": -15,
-    "inventory": ["bread", "bread", "tavern_stew", "coin"],
+    "inventory": ["bread", "bread", "tavern_stew", "coin", "coin", "coin", "coin"],
     "knowledge": [
         "The tavern is the last reliably warm place in town",
         "People who climb the ridge do not come back",

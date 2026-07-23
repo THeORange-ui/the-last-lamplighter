@@ -11,29 +11,17 @@ import threading
 
 import pygame
 
+from engine.items import display_name
 from engine.state import affinity_label
+from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from npc.agent import APPROACH, npc_respond
 from npc.roster import character_name
 from ui import theme as T
-from ui.render import draw_text
+from ui.inventory import TradePanel
+from ui.render import draw_text, wrap_text
 
 REVEAL_CPS = 55          # characters per second for the typewriter
 CLOSE_DELAY = 0.6        # seconds to linger after an end_dialogue line
-
-
-def wrap_text(text, fnt, max_w):
-    words = text.split(" ")
-    lines, cur = [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if fnt.size(trial)[0] <= max_w or not cur:
-            cur = trial
-        else:
-            lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
-    return lines
 
 
 class _Turn:
@@ -67,6 +55,7 @@ class DialogueBox:
         self._close_timer = 0.0
         self._end_after_reveal = False
         self._caret = 0.0
+        self.trade: TradePanel | None = None
 
         self._start_turn(APPROACH)
 
@@ -118,9 +107,19 @@ class DialogueBox:
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
             return
+        if self.trade is not None:
+            cmd = self.trade.handle_event(event)
+            if cmd:
+                self._handle_trade(cmd)
+            return
         if event.key == pygame.K_ESCAPE:
             self.finished = True
             return
+        # Open the trade view with I (when not mid-word, so 'i' can still be typed).
+        if event.key == pygame.K_i and (self.mode == "reveal" or not self.input_text):
+            if self.mode in ("reveal", "await"):
+                self.trade = TradePanel(self.world, self.npc_id, self.name)
+                return
         if self.mode == "reveal":
             # fast-forward the typewriter
             self.reveal = len(self.npc_line)
@@ -136,6 +135,30 @@ class DialogueBox:
             self.input_text = self.input_text[:-1]
         elif event.unicode and event.unicode.isprintable() and len(self.input_text) < 160:
             self.input_text += event.unicode
+
+    def _handle_trade(self, cmd):
+        action = cmd.get("cmd")
+        npc = self.world.npcs[self.npc_id]
+        item = cmd.get("item")
+        name = display_name(item) if item else ""
+        if action == "close":
+            self.trade = None
+        elif action == "gift":
+            if give_to_npc(self.world, npc, item):
+                self.world.adjust_affinity(self.npc_id, 2)
+                self.trade = None
+                self._start_turn(f"Here — I'd like you to have my {name}. Please, take it.")
+        elif action == "ask":
+            self.trade = None
+            self._start_turn(f"Could I have your {name}?")
+        elif action == "buy":
+            ok, why = buy_from_npc(self.world, npc, item)
+            self.trade.message = (f"Bought the {name} ({why})." if ok
+                                  else f"Can't buy the {name}: {why}.")
+        elif action == "sell":
+            ok, why = sell_to_npc(self.world, npc, item)
+            self.trade.message = (f"Sold the {name} ({why})." if ok
+                                  else f"Can't sell the {name}: {why}.")
 
     # --- draw -------------------------------------------------------------
     def draw(self, screen):
@@ -181,8 +204,13 @@ class DialogueBox:
             caret = "|" if self._caret < 0.5 else " "
             draw_text(screen, "> " + self.input_text + caret,
                       (body_x, iy), T.font(18, mono=True), T.TEXT)
+            draw_text(screen, "[I] items", (box.right - 16, iy + 2),
+                      T.font(13), T.TEXT_DIM, right=True)
         elif self.mode == "reveal":
-            draw_text(screen, "[Enter] to skip", (body_x, iy),
+            draw_text(screen, "[Enter] to skip · [I] items", (body_x, iy),
                       T.font(14), T.TEXT_DIM)
         else:
             draw_text(screen, "…", (body_x, iy), T.font(14), T.TEXT_DIM)
+
+        if self.trade is not None:
+            self.trade.draw(screen)

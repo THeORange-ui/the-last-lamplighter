@@ -8,6 +8,22 @@ from ui import sprites
 from ui import theme as T
 
 
+def wrap_text(text, fnt, max_w):
+    """Word-wrap `text` to a pixel width, returning a list of lines."""
+    words = text.split(" ")
+    lines, cur = [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if fnt.size(trial)[0] <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def draw_text(surf, text, pos, fnt, color, *, center=False, right=False):
     img = fnt.render(text, True, color)
     rect = img.get_rect()
@@ -67,6 +83,12 @@ def draw_overworld(screen, world, rooms):
         screen.blit(spr, (lx * T.TILE + (T.TILE - spr.get_width()) // 2,
                           ly * T.TILE + (T.TILE - spr.get_height())))
 
+    # dropped items on the floor
+    for g in world.ground_items_in(room.id):
+        icon = sprites.item_icon(g.item)
+        screen.blit(icon, (g.x * T.TILE + (T.TILE - icon.get_width()) // 2,
+                           g.y * T.TILE + (T.TILE - icon.get_height()) // 2))
+
     # NPCs in this room
     for npc in world.npcs.values():
         if npc.room != room.id:
@@ -109,7 +131,9 @@ def draw_hud(screen, world, rooms, hint=""):
     room = rooms[world.player.room]
     draw_text(screen, room.name, (14, T.PLAY_H + 8), T.font(20, bold=True), T.TEXT)
     lit = world.lit_lamp_count()
-    draw_text(screen, f"Lamps lit {lit}/{len(world.lamps)}   Hearthlight {world.hearthlight}/100",
+    p = world.player
+    draw_text(screen, f"HP {p.hp}/{p.max_hp}   Lamps {lit}/{len(world.lamps)}   "
+                      f"Hearthlight {world.hearthlight}/100",
               (14, T.PLAY_H + 34), T.font(15), T.TEXT_DIM)
 
     quests = world.active_quests()
@@ -122,5 +146,5 @@ def draw_hud(screen, world, rooms, hint=""):
         draw_text(screen, hint, (T.SCREEN_W - 14, T.PLAY_H + 50),
                   T.font(15, bold=True), T.TEXT_GOOD, right=True)
     else:
-        draw_text(screen, "WASD move · E interact · J journal · Esc menu",
+        draw_text(screen, "WASD · E talk · I items · J journal · Esc menu",
                   (T.SCREEN_W - 14, T.PLAY_H + 50), T.font(13), T.TEXT_DIM, right=True)
