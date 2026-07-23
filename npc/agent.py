@@ -129,8 +129,7 @@ Rules:
 - Let your affinity and memories shape your tone and what you're willing to do.
 """
     if state["player_input"] == APPROACH:
-        met_before = bool(state["memory"].recent(1))
-        if met_before:
+        if state["memory"].has_met():
             user = (
                 "The player walks up to you again. You have met before — see 'What has "
                 "happened between you before' and the recent happenings. Greet them as "
@@ -199,7 +198,31 @@ def act(state: TurnState) -> TurnState:
         if q.giver == npc_id:
             mem.remember(f'The player completed the quest you gave them: "{q.title}".')
 
+    # Compact the log if it's grown long (runs here in the dialogue worker thread).
+    mem.maybe_compact(lambda prior, old: summarize_memory(npc_id, prior, old))
+
     return {"result": result, "completed_quests": completed}
+
+
+def summarize_memory(npc_id, prior_summary, old_entries):
+    """Fold older memory entries into a compact first-person summary. Returns the
+    new summary string, or None on failure (so the caller keeps the entries)."""
+    char = load_character(npc_id)
+    prior = prior_summary or "(nothing yet)"
+    log = "\n".join(f"- {e}" for e in old_entries)
+    system = (
+        f"You maintain {char['name']}'s private memory of a person they have met. "
+        f"Rewrite their memory as a compact first-person summary (2-4 sentences) "
+        f"capturing the relationship, key facts, promises made, and how {char['name']} "
+        f"feels about them. Merge the earlier summary with the newer events; keep only "
+        f"what would matter later. Reply as JSON: {{\"summary\": \"...\"}}."
+    )
+    user = f"Earlier summary:\n{prior}\n\nNewer events to fold in:\n{log}"
+    try:
+        out = complete_json(system, user, temperature=0.4, max_tokens=300)
+    except LLMError:
+        return None
+    return str(out.get("summary", "")).strip() or None
 
 
 def _build_graph():

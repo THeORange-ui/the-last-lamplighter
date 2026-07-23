@@ -1,8 +1,12 @@
-"""Per-NPC memory: an append-only log of salient events, persisted per NPC.
+"""Per-NPC memory: a running summary + an append log of recent salient events.
 
-Kept deliberately simple for M1. When a log grows past MAX_ENTRIES we keep the
-most recent ones for the prompt; a summarization pass can be added later (the
-`older` entries are where that would hook in).
+When the verbatim log grows past COMPACT_THRESHOLD, the oldest entries are folded
+into a natural-language `summary` (via an LLM summarizer passed in by the caller)
+and dropped from the verbatim tail. The prompt then shows the summary plus the
+most recent entries, keeping context small and cheap as play goes on.
+
+File format: {"summary": str, "entries": [str, ...]}. Older saves that were a bare
+JSON list of entries are still read correctly.
 """
 from __future__ import annotations
 
@@ -12,28 +16,37 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MEMORY_DIR = ROOT / "runtime_memory"
 
-MAX_ENTRIES = 40          # hard cap kept on disk
-PROMPT_ENTRIES = 12       # how many recent entries go into the prompt
+PROMPT_ENTRIES = 12       # how many recent verbatim entries go into the prompt
+COMPACT_THRESHOLD = 16    # compact once the verbatim log exceeds this
+KEEP_RECENT = 8           # entries kept verbatim after a compaction
 
 
 class NPCMemory:
     def __init__(self, npc_id: str):
         self.npc_id = npc_id
         self.path = MEMORY_DIR / f"{npc_id}.json"
+        self.summary: str = ""
         self.entries: list[str] = []
         self._load()
 
     def _load(self) -> None:
-        if self.path.exists():
-            try:
-                self.entries = json.loads(self.path.read_text())
-            except (json.JSONDecodeError, ValueError):
-                self.entries = []
+        if not self.path.exists():
+            return
+        try:
+            data = json.loads(self.path.read_text())
+        except (json.JSONDecodeError, ValueError):
+            return
+        if isinstance(data, list):            # legacy format: bare list of entries
+            self.entries = data
+        elif isinstance(data, dict):
+            self.summary = data.get("summary", "")
+            self.entries = data.get("entries", [])
 
     def _save(self) -> None:
         MEMORY_DIR.mkdir(exist_ok=True)
-        self.entries = self.entries[-MAX_ENTRIES:]
-        self.path.write_text(json.dumps(self.entries, indent=2))
+        self.path.write_text(
+            json.dumps({"summary": self.summary, "entries": self.entries}, indent=2)
+        )
 
     def remember(self, note: str) -> None:
         note = note.strip()
@@ -44,11 +57,36 @@ class NPCMemory:
     def recent(self, n: int = PROMPT_ENTRIES) -> list[str]:
         return self.entries[-n:]
 
+    def has_met(self) -> bool:
+        return bool(self.entries or self.summary)
+
+    def maybe_compact(self, summarizer) -> bool:
+        """If the log is long, summarize the oldest entries into `summary`.
+
+        `summarizer(prior_summary, old_entries) -> str | None`. Returning None
+        (e.g. on an LLM error) skips this compaction so nothing is lost.
+        """
+        if len(self.entries) <= COMPACT_THRESHOLD:
+            return False
+        old = self.entries[:-KEEP_RECENT]
+        new_summary = summarizer(self.summary, old)
+        if not new_summary:
+            return False
+        self.summary = new_summary.strip()
+        self.entries = self.entries[-KEEP_RECENT:]
+        self._save()
+        return True
+
     def as_prompt(self, n: int = PROMPT_ENTRIES) -> str:
+        parts: list[str] = []
+        if self.summary:
+            parts.append(f"In summary, what you remember of this person so far:\n{self.summary}")
         recent = self.recent(n)
-        if not recent:
+        if recent:
+            parts.append("More recently, between you:\n" + "\n".join(f"- {e}" for e in recent))
+        if not parts:
             return "(You have not met this person before.)"
-        return "\n".join(f"- {e}" for e in recent)
+        return "\n\n".join(parts)
 
     @staticmethod
     def wipe_all() -> None:
