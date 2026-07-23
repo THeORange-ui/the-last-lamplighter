@@ -36,7 +36,10 @@ your character would actually do this turn. Each is a JSON object in "actions":
 - {"type": "move_to", "room": "<room id>"}
     Leave to go somewhere. This ends the conversation.
 - {"type": "join_combat"}
-    Declare you'll fight beside the player. (Combat arrives in a later build.)
+    Declare you'll fight beside the player if it comes to a fight (become an ally).
+- {"type": "attack"}
+    Turn hostile and attack the player RIGHT NOW. Only if your character truly would —
+    this starts a fight. Use rarely and in-character.
 - {"type": "end_dialogue"}
     End the conversation naturally.
 """
@@ -50,7 +53,8 @@ class ActionResult:
     effects: list[str] = field(default_factory=list)   # player-visible lines
     debug: list[str] = field(default_factory=list)     # dropped/invalid notes
     end_dialogue: bool = False
-    wants_combat: bool = False
+    wants_combat: bool = False     # NPC pledged to fight as an ally
+    starts_combat: bool = False    # NPC turned hostile and attacks now
 
 
 def _free_interior_tile(room: Room, blocked: set[tuple[int, int]]) -> tuple[int, int]:
@@ -133,6 +137,12 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             state.npcs[npc_id].flags["ally_pledged"] = True
             result.wants_combat = True
             result.effects.append(f"{name} vows to stand with you when it comes to a fight.")
+
+        elif atype == "attack":
+            result.starts_combat = True
+            result.end_dialogue = True
+            state.npcs[npc_id].flags["hostile"] = True
+            result.effects.append(f"{name} turns on you!")
 
         elif atype == "end_dialogue":
             result.end_dialogue = True

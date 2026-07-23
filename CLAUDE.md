@@ -94,8 +94,13 @@ the api_key in logs or commits.
   not ground down. The ridge path unseals once you've **read Ansel's ridge map** (sets
   `flags['map_read']`) and **lit all the lamps**; stepping onto the ridge starts the fight.
   Winning or sparing sets `flags['gloam_resolved']` and restores the Hearthlight.
-- **Build order (per user):** Gloam (done) → hostile NPCs + ally `join_combat` (todo) →
-  ridge creatures / bestiary (todo, `gloamling` stub exists).
+- **Hostile NPCs:** an NPC's AI can emit `attack` mid-dialogue to turn hostile and start a
+  fight (persona-driven, so they can be talked down/spared too — and they *remember* being
+  spared or bested). `join_combat` makes an NPC a pledged ally who fights beside you
+  (`ally_pledged` flag); allies join via `combatant_from_npc`.
+- **Ridge creatures:** `gloamling` enemies ambush once on the ridge path (`path_cleared`
+  flag stops repeats). Multi-enemy fights use a target-selection submenu.
+- **Build order (all done):** Gloam boss → hostile NPCs + allies → ridge creatures.
 
 ## Items, inventory & economy
 - **Catalog** (`engine/items.py`) is the closed set of real items — each with a display

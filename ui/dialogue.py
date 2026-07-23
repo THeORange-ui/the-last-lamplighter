@@ -56,6 +56,7 @@ class DialogueBox:
         self._end_after_reveal = False
         self._caret = 0.0
         self.trade: TradePanel | None = None
+        self.combat_request: str | None = None   # npc_id if the NPC turned hostile
 
         self._start_turn(APPROACH)
 
@@ -84,6 +85,9 @@ class DialogueBox:
         if out.get("error"):
             self.banner.append("(the words don't come — connection trouble)")
         if out.get("result") and out["result"].end_dialogue:
+            self._end_after_reveal = True
+        if out.get("result") and out["result"].starts_combat:
+            self.combat_request = self.npc_id
             self._end_after_reveal = True
 
     # --- update / events --------------------------------------------------

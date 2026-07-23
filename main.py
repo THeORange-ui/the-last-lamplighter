@@ -9,7 +9,7 @@ import sys
 
 import pygame
 
-from engine.combat import make_combat
+from engine.combat import combatant_from_npc, enemies_from_ids, make_combat
 from engine.items import CURRENCY, display_name, use_item
 from engine.quests import refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
@@ -72,6 +72,7 @@ class Game:
         self.inventory_open = False
         self.inv_panel: InventoryPanel | None = None
         self.combat_scene: CombatScene | None = None
+        self.combat_context: dict | None = None
         self.move_timer = 0.0
         self.toast = ""
         self.toast_timer = 0.0
@@ -197,6 +198,7 @@ class Game:
             )
             self.try_pickup()
             self.on_quests_completed(refresh_and_complete(self.world))  # "reach" objectives
+            self.check_encounters()
             return
         if (tx, ty) in room.blocked() or self.occupied(tx, ty):
             return
@@ -242,7 +244,8 @@ class Game:
             return
         lamps_lit = w.lit_lamp_count() == len(w.lamps)
         if w.flags.get("map_read") and lamps_lit:
-            self.start_combat(["gloam"])
+            self.begin_combat(enemies_from_ids(["gloam"]), self._pledged_allies(),
+                              {"type": "gloam"})
             return
         need = []
         if not lamps_lit:
@@ -251,39 +254,92 @@ class Game:
             need.append("to know the way (read Ansel's ridge map)")
         self.set_toast("The dark swallows the path. You need " + " and ".join(need) + ".")
 
-    def start_combat(self, enemy_ids, allies=None):
+    def _pledged_allies(self, exclude=None):
+        return [combatant_from_npc(n, "ally") for n in self.world.npcs.values()
+                if n.flags.get("ally_pledged") and n.npc_id != exclude]
+
+    def begin_combat(self, enemies, allies, context):
         w = self.world
         w.player.hp = max(1, w.player.hp)
-        combat = make_combat(w.player.hp, w.player.max_hp, enemy_ids, allies)
+        combat = make_combat(w.player.hp, w.player.max_hp, enemies, allies)
         self.combat_scene = CombatScene(w, combat)
+        self.combat_context = context
         self.scene = "combat"
+
+    def start_npc_combat(self, npc_id):
+        npc = self.world.npcs[npc_id]
+        enemy = combatant_from_npc(npc, "enemy")
+        self.begin_combat([enemy], self._pledged_allies(exclude=npc_id),
+                          {"type": "npc", "npc_id": npc_id})
+
+    def check_encounters(self):
+        """A one-time gloamling ambush the first time you brave the ridge path."""
+        w = self.world
+        if (w.player.room == "path" and not w.flags.get("path_cleared")
+                and not w.flags.get("gloam_resolved")):
+            self.set_toast("The dark stirs on the path...")
+            self.begin_combat(enemies_from_ids(["gloamling", "gloamling"]),
+                              self._pledged_allies(), {"type": "creature"})
 
     def on_combat_end(self, outcome):
         w = self.world
+        ctx = self.combat_context or {"type": "gloam"}
         self.combat_scene = None
+        self.combat_context = None
         self.scene = "overworld"
-        if outcome in ("won", "spared"):
-            w.flags["gloam_resolved"] = True
-            w.hearthlight = 100
-            verb = ("You lay the Gloam to rest." if outcome == "won"
-                    else "You reach the Gloam, and it yields.")
-            w.events.record("gloam",
-                            f"{verb} The Hearthlight steadies and the dusk lifts.")
-            self.set_toast("The dusk lifts. Emberhold will hold.")
-        elif outcome == "lost":
+
+        if outcome == "lost":
             w.player.room, w.player.x, w.player.y = "square", 9, 8
             w.player.hp = max(1, w.player.max_hp // 2)
             lost = 0
             while lost < 3 and CURRENCY in w.player.inventory:
                 w.player.inventory.remove(CURRENCY)
                 lost += 1
+            if ctx["type"] == "npc":
+                w.npcs[ctx["npc_id"]].flags["hostile"] = False
             w.events.record("knockout",
-                            "The dark took you, and let you go. You woke in the square.",
+                            "You were beaten down, and woke later in the square.",
                             public=False)
             self.set_toast("You wake in the square, aching."
                            + (f" {lost} coins slipped away." if lost else ""))
-        elif outcome == "fled":
-            self.set_toast("You retreat from the ridge, heart pounding.")
+            return
+        if outcome == "fled":
+            if ctx["type"] == "npc":
+                w.npcs[ctx["npc_id"]].flags["hostile"] = False
+            self.set_toast("You break off the fight and get clear.")
+            return
+
+        # won or spared
+        if ctx["type"] == "gloam":
+            w.flags["gloam_resolved"] = True
+            w.hearthlight = 100
+            verb = ("You lay the Gloam to rest." if outcome == "won"
+                    else "You reach the Gloam, and it yields.")
+            w.events.record("gloam", f"{verb} The Hearthlight steadies and the dusk lifts.")
+            self.set_toast("The dusk lifts. Emberhold will hold.")
+        elif ctx["type"] == "creature":
+            w.flags["path_cleared"] = True
+            verb = "drive off" if outcome == "won" else "quiet"
+            w.events.record("fight", f"You {verb} the gloamlings on the ridge path.")
+            self.set_toast("The path is clear, for now.")
+        else:
+            npc_id = ctx["npc_id"]
+            npc = w.npcs[npc_id]
+            npc.flags["hostile"] = False
+            name = character_name(npc_id)
+            if outcome == "spared":
+                npc.flags["reconciled"] = True
+                npc.affinity = max(npc.affinity, -5)
+                self.memory_for(npc_id).remember(
+                    "You attacked the player, but they spared you instead of striking back.")
+                w.events.record("fight", f"{name} stood down. An uneasy peace holds.")
+                self.set_toast(f"{name} stands down.")
+            else:
+                npc.flags["subdued"] = True
+                self.memory_for(npc_id).remember(
+                    "You attacked the player and were beaten. You owe them your life.")
+                w.events.record("fight", f"You bested {name} in the fight they started.")
+                self.set_toast(f"You best {name}.")
 
     def interact(self):
         kind, ident = self.adjacent_targets()
@@ -397,9 +453,12 @@ class Game:
         elif self.scene == "dialogue" and self.dialogue:
             self.dialogue.update(dt)
             if self.dialogue.finished:
+                combat_req = self.dialogue.combat_request
                 self.dialogue = None
                 self.scene = "overworld"
                 refresh_and_complete(self.world)
+                if combat_req:
+                    self.start_npc_combat(combat_req)
         elif self.scene == "combat" and self.combat_scene:
             self.combat_scene.update(dt)
 

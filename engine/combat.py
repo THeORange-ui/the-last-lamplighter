@@ -55,6 +55,32 @@ def make_enemy(enemy_id: str, *, uid: str | None = None) -> Combatant:
     )
 
 
+def enemies_from_ids(enemy_ids: list[str]) -> list[Combatant]:
+    return [make_enemy(eid, uid=(f"{eid}_{i}" if len(enemy_ids) > 1 else eid))
+            for i, eid in enumerate(enemy_ids)]
+
+
+# Default combat stats for a townsperson who turns hostile (or joins as an ally).
+NPC_COMBAT_DEFAULTS = {"hp": 24, "attack": 5, "defense": 2, "resolve": 60}
+
+
+def combatant_from_npc(npc, side: str) -> Combatant:
+    """Build a Combatant for an NPC (persona-driven, so it can be talked down)."""
+    from npc.roster import character_name, load_character
+    try:
+        cs = load_character(npc.npc_id).get("combat_stats", {})
+    except KeyError:
+        cs = {}
+    hp = cs.get("hp", NPC_COMBAT_DEFAULTS["hp"])
+    return Combatant(
+        id=(f"ally_{npc.npc_id}" if side == "ally" else npc.npc_id),
+        name=character_name(npc.npc_id), hp=hp, max_hp=hp,
+        attack=cs.get("attack", NPC_COMBAT_DEFAULTS["attack"]),
+        defense=cs.get("defense", NPC_COMBAT_DEFAULTS["defense"]),
+        side=side, persona=npc.npc_id, resolve=cs.get("resolve", NPC_COMBAT_DEFAULTS["resolve"]),
+    )
+
+
 @dataclass
 class Combat:
     combatants: list[Combatant]
@@ -95,17 +121,17 @@ def _apply_damage(target: Combatant, raw: int) -> int:
     return dmg
 
 
-def make_combat(player_hp: int, player_max_hp: int, enemy_ids: list[str],
+def make_combat(player_hp: int, player_max_hp: int, enemies: list[Combatant],
                 allies: list[Combatant] | None = None) -> Combat:
     player = Combatant(id="player", name="You", hp=player_hp, max_hp=player_max_hp,
                        attack=PLAYER_ATK, defense=PLAYER_DEF, side="player")
-    combatants = [player]
-    combatants += allies or []
-    for i, eid in enumerate(enemy_ids):
-        combatants.append(make_enemy(eid, uid=f"{eid}_{i}" if len(enemy_ids) > 1 else eid))
+    combatants = [player] + (allies or []) + list(enemies)
     c = Combat(combatants=combatants)
     foe = " and ".join(e.name for e in c.enemies())
-    c.add_log(f"{foe} rises before you.")
+    c.add_log(f"{foe} {'stands' if len(c.enemies()) == 1 else 'stand'} against you.")
+    if allies:
+        verb = "stands" if len(allies) == 1 else "stand"
+        c.add_log(f"{', '.join(a.name for a in allies)} {verb} with you.")
     return c
 
 
