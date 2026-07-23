@@ -59,7 +59,10 @@ the api_key in logs or commits.
 - **M1 polish (done):** save/load (`engine/save.py`), memory summarization
   (`npc/memory.py` + `agent.summarize_memory`), procedural pixel-art sprites
   (`ui/sprites.py`).
-- **Later:** more NPCs (Sella/Perrin files exist, unspawned), richer map, richer art.
+- **Town layout:** the square is the hub; tavern (Bram), market (Sella), and Perrin's
+  house hang off its edges, with the ridge path below. All four NPCs (Wren, Bram, Sella,
+  Perrin) are live on the map.
+- **Later:** richer map/art, combat (M2), memory of NPC↔NPC interactions.
 
 ## Events & memory (added after first M1 pass)
 - **Event log** (`engine/journal.py`, `EventLog` on `WorldState.events`) is the shared

@@ -66,6 +66,7 @@ class Room:
 
 
 def build_rooms() -> dict[str, Room]:
+    # The square is the hub; each neighbouring room hangs off one of its edges.
     square = Room(
         id="square",
         name="Town Square",
@@ -73,6 +74,8 @@ def build_rooms() -> dict[str, Room]:
         lamps={"lamp_square": (4, 3)},
         doors=[
             Door(x=GRID_W - 1, y=6, to_room="tavern", spawn=(1, 6)),
+            Door(x=0, y=6, to_room="market", spawn=(GRID_W - 2, 6)),
+            Door(x=9, y=0, to_room="home", spawn=(9, GRID_H - 2)),
             Door(x=9, y=GRID_H - 1, to_room="path", spawn=(9, 1)),
         ],
     )
@@ -82,6 +85,20 @@ def build_rooms() -> dict[str, Room]:
         lamps={"lamp_tavern": (14, 9)},
         obstacles={(3, 3), (4, 3), (5, 3)},  # the bar counter
         doors=[Door(x=0, y=6, to_room="square", spawn=(GRID_W - 2, 6))],
+    )
+    market = Room(
+        id="market",
+        name="The Dusk Market",
+        obstacles={(12, 4), (13, 4), (14, 4),   # a scavenger's stall
+                   (4, 8), (5, 8)},              # stacked crates
+        doors=[Door(x=GRID_W - 1, y=6, to_room="square", spawn=(1, 6))],
+    )
+    home = Room(
+        id="home",
+        name="Perrin's House",
+        obstacles={(7, 8), (8, 8),               # a table
+                   (13, 3), (14, 3)},            # a cold hearth / shelf
+        doors=[Door(x=9, y=GRID_H - 1, to_room="square", spawn=(9, 1))],
     )
     path = Room(
         id="path",
@@ -99,7 +116,7 @@ def build_rooms() -> dict[str, Room]:
             ),
         ],
     )
-    return {r.id: r for r in (square, tavern, path)}
+    return {r.id: r for r in (square, tavern, market, home, path)}
 
 
 # --- Character seed placement ------------------------------------------------
@@ -107,6 +124,8 @@ def build_rooms() -> dict[str, Room]:
 NPC_SPAWNS = {
     "wren": ("square", 9, 9),
     "bram": ("tavern", 9, 4),
+    "sella": ("market", 9, 7),
+    "perrin": ("home", 9, 6),
 }
 
 
