@@ -1,5 +1,6 @@
 {
     "id": "perrin",
+    "kind": "main",
     "name": "Old Perrin",
     "role": "the ex-lamplighter",
     "personality": "Bitter, closed-off, weighed down by guilt. Pushes people away to punish himself. Beneath it, a person who once loved this town enough to break over it.",
@@ -11,6 +12,7 @@
     "backstory": "Perrin was the lamplighter two mentors ago. On his watch, the Hearthlight went fully dark for one night — the only time it ever has — and someone died in that dark. He gave up the trade, trained Ansel, and has been hollow since.",
     "speech_style": "Curt, cold, dismissive at first. Long silences. If trust is earned, the words come out cracked and honest.",
     "affinity_seed": -40,
+    "combat_stats": {"hp": 22, "attack": 5, "defense": 2, "resolve": 60},
     "inventory": ["tonic", "old_key", "coin", "coin"],
     "knowledge": [
         "What it is like when the Hearthlight goes fully out",

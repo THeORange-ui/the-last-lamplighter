@@ -101,6 +101,7 @@ class InventoryPanel:
                   (T.SCREEN_W - m, 26), T.font(15), T.TEXT_DIM, right=True)
 
         items = self._items()
+        self.sel = _clamp(self.sel, len(items))
         _draw_item_list(screen, m, 70, items, self.sel, active=(self.mode == "items"))
 
         # right detail column
@@ -213,6 +214,7 @@ class TradePanel:
 
         # action row for the active side / selected item
         items = self._list(self.side)
+        self.sel = _clamp(self.sel, len(items))
         ay = T.SCREEN_H - 118
         if items:
             item_id = items[self.sel][0]

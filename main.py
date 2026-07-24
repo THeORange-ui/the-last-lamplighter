@@ -24,6 +24,7 @@ from ui.combat import CombatScene
 from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
 from ui.menu import Menu
+from ui.party import PartyPanel
 from ui.render import draw_hud, draw_overworld, draw_text
 
 MOVE_DELAY = 0.12   # seconds between grid steps while a direction is held
@@ -76,7 +77,11 @@ class Game:
         self.move_timer = 0.0
         self.toast = ""
         self.toast_timer = 0.0
+        self.party_open = False
+        self.party_panel: PartyPanel | None = None
+        self._trail: list[tuple[int, int]] = []   # player's recent tiles (for followers)
         self.running = True
+        self._gather_party()
 
     def memory_for(self, npc_id: str) -> NPCMemory:
         if npc_id not in self.memories:
@@ -98,6 +103,7 @@ class Game:
         self.menu_open = False
         self.scene = "overworld"
         self.dialogue = None
+        self._gather_party()          # place restored companions beside you
         self.set_toast(f"Loaded “{name}”.")
 
     def handle_menu_command(self, cmd: dict) -> None:
@@ -133,6 +139,16 @@ class Game:
             if self.inv_panel:
                 self.inv_panel.message = f"Dropped {display_name(cmd['item'])}."
 
+    def handle_party_command(self, cmd: dict) -> None:
+        action = cmd.get("cmd")
+        if action == "close":
+            self.party_open = False
+        elif action == "talk":
+            # Talk to a companion in a normal conversation. If you ask them to part
+            # ways, they decide to leave (the leave_party action), and no other way.
+            self.party_open = False
+            self.open_dialogue(cmd["npc"])
+
     def set_toast(self, text: str):
         self.toast = text
         self.toast_timer = TOAST_TIME
@@ -148,8 +164,12 @@ class Game:
 
     # --- helpers ----------------------------------------------------------
     def occupied(self, x, y) -> bool:
+        """A tile is blocked by an NPC — but companions in your party step aside
+        (they trail you), so they never wall you in."""
         room = self.world.player.room
-        return any(n.room == room and (n.x, n.y) == (x, y) for n in self.world.npcs.values())
+        return any(n.room == room and (n.x, n.y) == (x, y)
+                   and n.npc_id not in self.world.party
+                   for n in self.world.npcs.values())
 
     def adjacent_targets(self):
         """Return (kind, id) for whatever the player can interact with nearby."""
@@ -158,6 +178,10 @@ class Game:
         for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
             tx, ty = px + dx, py + dy
             for n in self.world.npcs.values():
+                # Companions trail right behind you — don't let E perpetually snag them;
+                # you talk to party members from the party view (P) instead.
+                if n.npc_id in self.world.party:
+                    continue
                 if n.room == room.id and (n.x, n.y) == (tx, ty):
                     return ("npc", n.npc_id)
             lamp = room.lamp_at(tx, ty)
@@ -196,14 +220,88 @@ class Game:
             self.world.events.record(
                 "arrive", f"You entered {self.rooms[p.room].name}.", public=False
             )
+            self._gather_party()          # companions follow you through the door
             self.try_pickup()
             self.on_quests_completed(refresh_and_complete(self.world))  # "reach" objectives
             self.check_encounters()
             return
         if (tx, ty) in room.blocked() or self.occupied(tx, ty):
             return
+        old = (p.x, p.y)
         p.x, p.y = tx, ty
+        self._advance_trail(old)
+        self._place_followers()
         self.try_pickup()
+
+    # --- party movement ---------------------------------------------------
+    def _reset_trail(self):
+        self._trail = []
+
+    def _advance_trail(self, old_tile):
+        self._trail.insert(0, old_tile)
+        del self._trail[len(self.world.party) + 2:]
+
+    def _walkable(self, room_id, tile) -> bool:
+        from engine.world import GRID_H, GRID_W
+        tx, ty = tile
+        # keep companions off the border/doorway ring
+        if tx <= 0 or ty <= 0 or tx >= GRID_W - 1 or ty >= GRID_H - 1:
+            return False
+        if tile in self.rooms[room_id].blocked():
+            return False
+        for n in self.world.npcs.values():
+            if n.npc_id in self.world.party:
+                continue
+            if n.room == room_id and (n.x, n.y) == tile:
+                return False
+        return True
+
+    def _nearest_free(self, room_id, cx, cy, taken):
+        from engine.world import GRID_H, GRID_W
+        for r in range(1, max(GRID_W, GRID_H)):
+            for dx in range(-r, r + 1):
+                for dy in range(-r, r + 1):
+                    if max(abs(dx), abs(dy)) != r:
+                        continue
+                    t = (cx + dx, cy + dy)
+                    if (0 <= t[0] < GRID_W and 0 <= t[1] < GRID_H
+                            and t not in taken and self._walkable(room_id, t)):
+                        return t
+        return None
+
+    def _place_followers(self):
+        """Trail the party behind the player within the current room."""
+        p = self.world.player
+        taken = {(p.x, p.y)}
+        for i, nid in enumerate(self.world.party):
+            npc = self.world.npcs.get(nid)
+            if npc is None:
+                continue
+            npc.room = p.room
+            pref = self._trail[i] if i < len(self._trail) else None
+            if pref and pref not in taken and self._walkable(p.room, pref):
+                npc.x, npc.y = pref
+            else:
+                spot = self._nearest_free(p.room, p.x, p.y, taken)
+                if spot:
+                    npc.x, npc.y = spot
+            taken.add((npc.x, npc.y))
+
+    def _gather_party(self):
+        """Snap every party member into free tiles around the player (on room
+        change, recruit, or load) and reset the follow trail."""
+        p = self.world.player
+        taken = {(p.x, p.y)}
+        for nid in self.world.party:
+            npc = self.world.npcs.get(nid)
+            if npc is None:
+                continue
+            npc.room = p.room
+            spot = self._nearest_free(p.room, p.x, p.y, taken)
+            if spot:
+                npc.x, npc.y = spot
+                taken.add(spot)
+        self._reset_trail()
 
     def try_pickup(self):
         p = self.world.player
@@ -253,8 +351,10 @@ class Game:
         return "The dark swallows the path. You need " + " and ".join(need) + "."
 
     def _pledged_allies(self, exclude=None):
-        return [combatant_from_npc(n, "ally") for n in self.world.npcs.values()
-                if n.flags.get("ally_pledged") and n.npc_id != exclude]
+        """Party members auto-join every fight at your side."""
+        return [combatant_from_npc(self.world.npcs[nid], "ally")
+                for nid in self.world.party
+                if nid != exclude and nid in self.world.npcs]
 
     def begin_combat(self, enemies, allies, context):
         w = self.world
@@ -411,6 +511,10 @@ class Game:
                 cmd = self.inv_panel.handle_event(event)
                 if cmd:
                     self.handle_inventory_command(cmd)
+            elif self.party_open:
+                cmd = self.party_panel.handle_event(event)
+                if cmd:
+                    self.handle_party_command(cmd)
             elif self.scene == "intro":
                 if event.type == pygame.KEYDOWN:
                     self.scene = "overworld"
@@ -438,6 +542,9 @@ class Game:
                 elif event.key == pygame.K_i and not self.journal_open:
                     self.inv_panel = InventoryPanel(self.world)
                     self.inventory_open = True
+                elif event.key == pygame.K_p and not self.journal_open:
+                    self.party_panel = PartyPanel(self.world)
+                    self.party_open = True
                 elif not self.journal_open and event.key in INTERACT_KEYS:
                     self.interact()
 
@@ -448,7 +555,7 @@ class Game:
         if self.menu_open:
             self.menu.update(dt)
             return
-        if self.inventory_open:
+        if self.inventory_open or self.party_open:
             return
 
         if self.scene == "overworld" and not self.journal_open:
@@ -467,6 +574,7 @@ class Game:
                 self.dialogue = None
                 self.scene = "overworld"
                 refresh_and_complete(self.world)
+                self._gather_party()      # snap a new companion in / close ranks
                 if combat_req:
                     self.start_npc_combat(combat_req)
         elif self.scene == "combat" and self.combat_scene:
@@ -494,6 +602,8 @@ class Game:
             draw_journal(self.screen, self.world)
         if self.inventory_open and self.inv_panel:
             self.inv_panel.draw(self.screen)
+        if self.party_open and self.party_panel:
+            self.party_panel.draw(self.screen)
         if self.menu_open:
             self.menu.draw(self.screen, self.save_name)
 
@@ -524,7 +634,7 @@ class Game:
             "",
             "Talk to them. Help them, or don't. Find your way to the ridge.",
             "",
-            "Move: WASD   Interact: E   Inventory: I   Journal: J   Menu: Esc",
+            "Move: WASD   Interact: E   Inventory: I   Party: P   Journal: J   Menu: Esc",
             "",
             "Press any key to begin.",
         ]

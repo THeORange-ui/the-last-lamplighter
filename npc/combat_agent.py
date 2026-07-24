@@ -7,9 +7,13 @@ a fight never stalls waiting on the model.
 """
 from __future__ import annotations
 
-from engine.combat import Combat, Combatant, enemy_attack
+from engine.combat import (Combat, Combatant, ally_attack, ally_defend,
+                           ally_spare, ally_step, enemy_attack)
 from llm.client import LLMError, complete_json
 from npc.roster import load_character
+
+# A companion's words can wear down a foe a little (they can help talk enemies down).
+ALLY_SPEAK_RESOLVE_HIT = 6
 
 # Fallback ACT options if an enemy has none defined.
 DEFAULT_ACT_OPTIONS = ["Reason with it", "Show empathy", "Offer peace", "Threaten it"]
@@ -139,3 +143,93 @@ def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
     if enemy.spareable:
         combat.add_log(f"{enemy.name} no longer moves to strike. You could spare it.")
     return reaction or "..."
+
+
+# --- companions (party members fighting at your side) ------------------------
+def _ally_state_block(combat: Combat, ally: Combatant) -> str:
+    p = combat.player()
+    foes = combat.enemies()
+    foe_lines = "; ".join(
+        f"{e.name} (id={e.id}, hp {e.hp}/{e.max_hp}, resolve {e.resolve}"
+        + (", willing to stop" if e.spareable else "") + ")"
+        for e in foes
+    ) or "no foe still stands"
+    return (
+        f"You fight alongside the player against: {foe_lines}.\n"
+        f"Your health: {ally.hp}/{ally.max_hp}. The player's health: {p.hp}/{p.max_hp}.\n"
+        f"Recent combat: {' '.join(combat.log[-4:]) if combat.log else '(it has just begun)'}\n"
+        f"The player just did: {_last_player_move(combat)}"
+    )
+
+
+def ally_turn(combat: Combat, ally: Combatant, world=None) -> str:
+    """A companion takes their turn, choosing via the LLM from the same options the
+    player has. Falls back to a plain attack on any LLM trouble."""
+    if not ally.persona:
+        return ally_step(combat, ally)
+
+    system = (
+        f"{_persona_block(ally)}\n\n"
+        "You are in a turn-based fight, standing with the player as their companion. "
+        "Choose ONE action for your turn — the same choices the player has. Reply as JSON: "
+        '{"say": "<one short in-character line to the player, a foe, or yourself; may be '
+        'empty>", "action": "attack" | "defend" | "speak" | "spare", '
+        '"target": "<foe id for attack/spare; omit otherwise>"}. '
+        "attack = strike a foe. defend = brace against the next blow. speak = only talk this "
+        "turn (gentle or understanding words to a FOE can wear down their will to fight). "
+        "spare = stay your hand toward a foe already willing to stop. Act the way THIS "
+        "character would — some rush in, some hang back, some would rather reach out."
+    )
+    user = _ally_state_block(combat, ally) + "\n\nWhat do you do?"
+    try:
+        out = complete_json(system, user, temperature=0.8, max_tokens=180)
+    except LLMError:
+        return ally_step(combat, ally)
+
+    say = str(out.get("say", "")).strip()
+    action = str(out.get("action", "attack")).strip().lower()
+    tid = str(out.get("target", "")).strip()
+    if say:
+        combat.add_log(f"{ally.name}: “{say}”")
+
+    foes = combat.enemies()
+    target = next((e for e in foes if e.id == tid), None) or (foes[0] if foes else None)
+
+    if action == "defend":
+        return ally_defend(combat, ally)
+    if action == "spare" and target is not None:
+        return ally_spare(combat, ally, target)
+    if action == "speak":
+        if target is not None and target.persona:
+            target.resolve = max(0, target.resolve - ALLY_SPEAK_RESOLVE_HIT)
+            if target.resolve <= 0 and not target.spareable:
+                target.spareable = True
+                combat.add_log(f"{target.name} falters at {ally.name}'s words.")
+        return say or "..."
+    # default: attack
+    if target is not None:
+        return ally_attack(combat, ally, target)
+    return ""
+
+
+def speak_to_ally(combat: Combat, ally: Combatant, said: str, world=None) -> str:
+    """The player says something to a companion mid-fight; they answer in character."""
+    if not ally.persona:
+        combat.add_log(f"{ally.name} nods to you.")
+        return "..."
+    system = (
+        f"{_persona_block(ally)}\n\n"
+        "You are fighting alongside the player as their companion. In the middle of the "
+        f'battle, the player turns to you and says: "{said}". React in ONE short '
+        'in-character line. Reply as JSON: {"reply": "<your line>"}.'
+    )
+    user = _ally_state_block(combat, ally) + "\n\nRespond."
+    try:
+        out = complete_json(system, user, temperature=0.8, max_tokens=120)
+    except LLMError:
+        combat.add_log(f"{ally.name} nods to you.")
+        return "..."
+    reply = str(out.get("reply", "")).strip()
+    if reply:
+        combat.add_log(f"{ally.name}: “{reply}”")
+    return reply or "..."

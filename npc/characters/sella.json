@@ -1,5 +1,6 @@
 {
     "id": "sella",
+    "kind": "main",
     "name": "Sella",
     "role": "a traveling scavenger",
     "personality": "Sharp, transactional, quick-witted. Everything has a price. Not cruel — just done with places that die. Respects competence.",
@@ -11,6 +12,7 @@
     "backstory": "Drifts between failing towns trading what she scavenges. She found a partial way up the ridge and survived it — the only living soul who has. She won't share it cheaply, and won't die for this town.",
     "speech_style": "Fast, transactional, faintly amused. Deals in offers and counteroffers. Warms only to people who don't waste her time.",
     "affinity_seed": 0,
+    "combat_stats": {"hp": 24, "attack": 6, "defense": 2, "resolve": 55},
     "inventory": ["scrap", "scrap", "old_key", "tonic",
                   "coin", "coin", "coin", "coin", "coin", "coin", "coin", "coin"],
     "knowledge": [

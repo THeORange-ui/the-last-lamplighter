@@ -10,9 +10,8 @@ import threading
 import pygame
 
 from engine.combat import (Combat, player_attack, player_defend, player_spare)
-from engine.combat import ally_step
 from engine.items import ITEMS, display_name
-from npc.combat_agent import enemy_turn, mercy_attempt
+from npc.combat_agent import ally_turn, enemy_turn, mercy_attempt, speak_to_ally
 from ui import sprites
 from ui import theme as T
 from ui.render import draw_text, wrap_text
@@ -22,11 +21,11 @@ class CombatScene:
     def __init__(self, world, combat: Combat):
         self.world = world
         self.combat = combat
-        self.phase = "menu"          # menu | act_input | item | target | resolving | ended
+        self.phase = "menu"          # menu | act_target | act_input | item | target | resolving | ended
         self.sel = 0
         self.sub_sel = 0
         self.act_text = ""           # free-text speech for ACT
-        self._act_enemy = None
+        self._act_target = None      # whoever you're speaking to (foe or companion)
         self.finished = False
         self.outcome = ""
         self._busy = False           # a turn is resolving on the worker thread
@@ -55,6 +54,10 @@ class CombatScene:
         alive = self.combat.enemies()
         return alive[min(self.sub_sel, len(alive) - 1)] if alive else None
 
+    def _act_targets(self):
+        """Who you can speak to: standing foes first, then your companions."""
+        return self.combat.enemies() + [a for a in self.combat.allies() if a.alive]
+
     # --- turn resolution (threaded, because enemy turns hit the LLM) ------
     def _resolve(self, player_action):
         """Run the player's action then the opponents' round on a worker thread."""
@@ -69,7 +72,9 @@ class CombatScene:
                 if not self.combat.over:
                     for ally in self.combat.allies():
                         if ally.alive:
-                            ally_step(self.combat, ally)
+                            ally_turn(self.combat, ally, self.world)
+                        if self.combat.over:
+                            break
                     self.combat.check_end()
                 if not self.combat.over:
                     for enemy in list(self.combat.enemies()):
@@ -97,6 +102,8 @@ class CombatScene:
             self._menu_key(event)
         elif self.phase == "target":
             self._list_key(event, self.combat.enemies(), self._on_target)
+        elif self.phase == "act_target":
+            self._list_key(event, self._act_targets(), self._on_act_target)
         elif self.phase == "act_input":
             self._act_input_key(event)
         elif self.phase == "item":
@@ -133,9 +140,14 @@ class CombatScene:
         elif option == "Defend":
             self._resolve(lambda: player_defend(self.combat))
         elif option == "Act":
-            self._act_enemy = enemies[0]
-            self.act_text = ""
-            self.phase = "act_input"
+            targets = self._act_targets()
+            if len(targets) <= 1:
+                self._act_target = targets[0] if targets else None
+                self.act_text = ""
+                self.phase = "act_input"
+            else:
+                self.sub_sel = 0
+                self.phase = "act_target"
         elif option == "Item":
             self.sub_sel = 0; self.phase = "item"
         elif option == "Spare":
@@ -148,15 +160,23 @@ class CombatScene:
     def _on_target(self, enemy):
         self._resolve(lambda: player_attack(self.combat, enemy))
 
+    def _on_act_target(self, combatant):
+        self._act_target = combatant
+        self.act_text = ""
+        self.phase = "act_input"
+
     def _act_input_key(self, event):
         if event.key == pygame.K_ESCAPE:
             self.phase = "menu"
         elif event.key == pygame.K_RETURN:
             said = self.act_text.strip()
             if said:
-                enemy = self._act_enemy
+                tgt = self._act_target
                 self.combat.add_log(f"You: “{said}”")
-                self._resolve(lambda: mercy_attempt(self.combat, enemy, said))
+                if tgt is not None and tgt.side == "ally":
+                    self._resolve(lambda: speak_to_ally(self.combat, tgt, said, self.world))
+                else:
+                    self._resolve(lambda: mercy_attempt(self.combat, tgt, said))
         elif event.key == pygame.K_BACKSPACE:
             self.act_text = self.act_text[:-1]
         elif event.unicode and event.unicode.isprintable() and len(self.act_text) < 140:
@@ -220,6 +240,14 @@ class CombatScene:
         _bar(screen, 20, T.PLAY_H - 40, 220, p.hp, p.max_hp, (110, 200, 120),
              f"You  {p.hp}/{p.max_hp}")
 
+        # companions fighting beside you
+        ax = 260
+        for a in self.combat.allies(alive_only=False):
+            col = (120, 170, 220) if a.alive else (90, 90, 100)
+            _bar(screen, ax, T.PLAY_H - 40, 170, a.hp, a.max_hp, col,
+                 f"{a.name}  {a.hp}/{a.max_hp}")
+            ax += 190
+
         # log
         self._draw_log(screen)
         # menu / submenu
@@ -245,9 +273,9 @@ class CombatScene:
                 y += 20
 
     def _draw_act_input(self, screen):
-        enemy = self._act_enemy
+        tgt = self._act_target
         y = T.SCREEN_H - 92
-        draw_text(screen, f"Speak to {enemy.name if enemy else 'it'}:",
+        draw_text(screen, f"Speak to {tgt.name if tgt else 'it'}:",
                   (30, y), T.font(17, bold=True), T.TEXT)
         caret = "|" if self._caret < 0.5 else " "
         draw_text(screen, "> " + self.act_text + caret, (30, y + 28),
@@ -264,6 +292,10 @@ class CombatScene:
             sel = self.sel
         elif self.phase == "target":
             items = [e.name for e in self.combat.enemies()]
+            sel = self.sub_sel
+        elif self.phase == "act_target":
+            items = [f"{c.name} ({'foe' if c.side == 'enemy' else 'companion'})"
+                     for c in self._act_targets()]
             sel = self.sub_sel
         else:  # item
             heals = self._heal_items()

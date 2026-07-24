@@ -168,15 +168,42 @@ def player_spare(combat: Combat, target: Combatant) -> str:
     return f"You spare {target.name}."
 
 
-def ally_step(combat: Combat, ally: Combatant) -> str:
-    target = next((e for e in combat.enemies()), None)
-    if not target:
-        return ""
+def ally_attack(combat: Combat, ally: Combatant, target: Combatant) -> str:
+    """A companion strikes a chosen foe (used by the LLM-driven ally turn)."""
+    ally.defending = False
     dmg = _apply_damage(target, ally.attack)
     msg = f"{ally.name} strikes {target.name} for {dmg}."
+    if not target.alive:
+        msg += f" {target.name} is undone."
     combat.add_log(msg)
     combat.check_end()
     return msg
+
+
+def ally_defend(combat: Combat, ally: Combatant) -> str:
+    ally.defending = True
+    msg = f"{ally.name} steadies, guarding against the next blow."
+    combat.add_log(msg)
+    return msg
+
+
+def ally_spare(combat: Combat, ally: Combatant, target: Combatant) -> str:
+    """A companion stays their hand toward a foe already willing to stop."""
+    if not target.spareable:
+        return ""
+    target.alive = False
+    combat.add_log(f"{ally.name} lowers their guard. {target.name} yields.")
+    if not combat.enemies():
+        combat.over, combat.outcome = True, "spared"
+    return f"{ally.name} spares {target.name}."
+
+
+def ally_step(combat: Combat, ally: Combatant) -> str:
+    """Mechanical fallback: attack the first standing foe."""
+    target = next((e for e in combat.enemies()), None)
+    if not target:
+        return ""
+    return ally_attack(combat, ally, target)
 
 
 def enemy_attack(combat: Combat, enemy: Combatant, *, heavy: bool = False) -> str:

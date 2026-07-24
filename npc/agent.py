@@ -18,7 +18,7 @@ from engine.items import catalog_for_prompt, display_name
 from engine.quests import refresh_and_complete
 from engine.state import affinity_label
 from llm.client import LLMError, complete_json
-from npc.actions import ACTION_CATALOG, apply_actions
+from npc.actions import action_catalog, apply_actions
 from npc.roster import load_character
 
 # Sentinel player_input meaning "the player just walked up" — NPC greets first.
@@ -122,7 +122,7 @@ Affinity: {npc.affinity} out of 100 → {label}.
 {_world_briefing(world, state['rooms'], state['known'], npc_id)}
 
 # Actions you can take
-{ACTION_CATALOG}
+{action_catalog(char.get('kind', 'main'))}
 
 # How to respond
 Reply with ONE JSON object and nothing else:

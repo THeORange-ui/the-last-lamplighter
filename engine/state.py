@@ -71,6 +71,24 @@ class WorldState:
     hearthlight: int = 60                                    # the failing lantern, 0..100
     events: EventLog = field(default_factory=EventLog)      # shared world event log
     ground_items: list = field(default_factory=list)        # list[GroundItem]
+    party: list[str] = field(default_factory=list)          # npc_ids travelling with you
+
+    # --- party ------------------------------------------------------------
+    def in_party(self, npc_id: str) -> bool:
+        return npc_id in self.party
+
+    def add_to_party(self, npc_id: str) -> bool:
+        """Add an NPC to the party. Returns False if already a member."""
+        if npc_id in self.party:
+            return False
+        self.party.append(npc_id)
+        return True
+
+    def remove_from_party(self, npc_id: str) -> bool:
+        if npc_id in self.party:
+            self.party.remove(npc_id)
+            return True
+        return False
 
     # --- inventory --------------------------------------------------------
     def has_item(self, item: str) -> bool:

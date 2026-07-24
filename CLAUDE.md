@@ -1,157 +1,172 @@
-# The Last Lamplighter — AI-driven RPG framework
+# CLAUDE.md
 
-An Undertale-style, turn-based RPG whose NPCs are driven by an LLM. The point of the
-project is the **framework**, not an AAA game: a small world where NPCs with their own
-drives, memory, and dispositions produce emergent quests and stories on the fly.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Vision / pillars
-- **Turn-based, open dialogue.** Player types free text; NPCs reply via LLM. No real-time.
-- **Actions-as-tools.** The LLM never mutates the game directly. Each NPC turn returns
-  `dialogue + a bounded list of actions` (give_quest, adjust_affinity, move_to,
-  offer_item, reveal_fact, end_dialogue, …). The engine **validates** every action against
-  real world entities and applies it. Invalid actions are dropped, never executed.
-- **Game state is the single source of truth.** Dispositions, inventory, quests, flags,
-  positions all live in `WorldState`. The LLM *reads* state as context and *proposes*
-  changes; it never silently "remembers" something the engine doesn't record.
-- **Emergent but checkable.** Quests use a bounded schema with an objective type from an
-  enum and a target that must resolve to a known entity, so the engine can detect
-  completion. Free-form flavor text, structured spine.
-- **Small on purpose.** ~4-5 characters, a handful of rooms. Set up for substantive
-  stories, not scale.
+## What this is
 
-## World (approved)
-Setting: **Emberhold**, a dying town in permanent dusk, kept alive by a failing great
-lantern, the **Hearthlight**. Something on the ridge is eating the light. Lore-goal:
-reach the ridge and confront **The Gloam** — a lonely, cold final "boss" you can fight
-OR talk down (ACT/mercy). Tone: melancholy-but-warm, very Undertale.
+**The Last Lamplighter** — an Undertale-style, turn-based RPG whose NPCs are driven by an
+LLM. The point of the project is the **framework**, not a finished game: a small world
+(~4-5 characters, a handful of rooms) where NPCs with their own drives, memory, and
+dispositions produce emergent, engine-checkable quests. Setting is **Emberhold**, a town
+in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk down) the
+**Gloam**.
 
-Cast: **Wren** (lamplighter's apprentice, starter-quest giver), **Bram** (wary
-tavernkeeper), **Sella** (transactional scavenger who knows the ridge path), **Old
-Perrin** (guilt-ridden ex-lamplighter, mercy-route unlock), **The Gloam** (final boss).
+## Commands
 
-Starter quest (the ONE authored quest): Wren asks the player to relight 3 dead lamps
-around town. Teaches movement, NPC-given quest, checkable objective, reward. Everything
-after emerges from NPCs.
-
-## Tech stack
-- **Python 3.13**, deps in project `.venv/` (activate: `.venv/bin/python`).
-- **Pygame** — rendering + turn/scene loop. Placeholder programmatic art for now
-  (colored rects/labels); real pixel sprites later.
-- **LangGraph** — the NPC "brain" graph (perceive → reason → act). This is the engine,
-  per project requirement.
-- **OpenAI-compatible LLM** — user supplies `base_url`, `api_key`, `model` in
-  `settings.json` (gitignored). Never commit or echo the key. Calls go through the
-  `openai` SDK. Because the endpoint is an arbitrary proxy, prefer robust **JSON-in-content
-  parsing** over hard dependence on the function-calling API.
-
-## Config
-`settings.json` (gitignored, already present) holds `base_url`, `api_key`, `model`.
-`settings.example.json` is the committed template. Load via `llm/config.py`. Never print
-the api_key in logs or commits.
-
-## Milestones
-- **M1 (current): framework vertical slice.** Town + a couple rooms, Wren + one more NPC
-  live, free-text dialogue, starter quest firing AND completing via the checker, memory
-  persisting across a conversation, disposition shifting. **No combat** — but wire the
-  combat action hooks so M2 is additive.
-- **M2: combat.** Turn-based JRPG menu (attack/defend/item/flee) PLUS **ACT/mercy** to
-  talk down hostile NPCs and the Gloam via the LLM. NPCs can `join_combat`.
-- **M1 polish (done):** save/load (`engine/save.py`), memory summarization
-  (`npc/memory.py` + `agent.summarize_memory`), procedural pixel-art sprites
-  (`ui/sprites.py`).
-- **Town layout:** the square is the hub; tavern (Bram), market (Sella), and Perrin's
-  house hang off its edges, with the ridge path below. All four NPCs (Wren, Bram, Sella,
-  Perrin) are live on the map.
-- **Later:** richer map/art, combat (M2), memory of NPC↔NPC interactions.
-
-## Events & memory (added after first M1 pass)
-- **Event log** (`engine/journal.py`, `EventLog` on `WorldState.events`) is the shared
-  record of notable happenings (quest start/complete, lamp lit, arrivals, item gets).
-  *Public* events are folded into every NPC's briefing under "Recent happenings" so NPCs
-  are aware of world progression without being told. All events power the player-facing
-  **journal** (press **J**), `ui/journal.py`.
-- **Greeting continuity:** the `APPROACH` sentinel branches on whether the NPC has any
-  memory of the player. First meeting → introduce; return visit → acknowledge shared
-  history and react to what's changed. This fixed the original "same greeting every visit"
-  bug — the root cause was the greeting prompt never instructing the NPC to *use* memory
-  (the memory was in-context and the reply path used it fine; only the greeting ignored it).
-- **Completion memory:** when a quest completes, its giver gets a personal memory line
-  ("The player completed the quest you gave them…") — written from `main.on_quests_completed`
-  for world-triggered completions (e.g. lamps) and from `agent.act` when the giver is the
-  NPC currently talking.
-
-## Combat (M2, in progress)
-- **Turn-based**, menu-driven (`engine/combat.py` logic; `ui/combat.py` scene). Player
-  actions: Attack / Defend / Act / Item / Spare / Flee. HP is the player's `PlayerState.hp`;
-  combat writes it back on exit. Defeat = **knocked out**, wake in the square at half HP
-  minus a few coins (never a hard game-over).
-- **ACT is a free-text speech box** (not a menu): you type what you *say* to the enemy, and
-  it routes to the enemy's AI (`npc/combat_agent.py`), which reacts in character and adjusts
-  its `resolve` — answer what it truly wants and it becomes **spareable**, ending the fight
-  peacefully. The enemy also **talks back reacting to your move** each round (attack/heavy/
-  loom chosen by the AI), with mechanical fallbacks on LLM error. Enemy turns run on a
-  worker thread with a spinner, like dialogue.
-- **The ridge is a real place** (`biome="snow"` rooms): `path` → `ridge_foot` → `ridge_pass`
-  → `ridge_summit`. It unseals once you've **read Ansel's map** (`flags['map_read']`) and
-  **lit all the lamps** (`main._ridge_open`). Non-AI `gloamling` creatures ambush in the
-  foot/pass rooms (per-room `*_cleared` flags); a supply item waits to be found. Fleeing a
-  ridge fight drops you back to the trailhead.
-- **The Gloam** (`npc/characters/gloam.json`) waits at the summit: high HP, meant to be
-  *reached* with words, not ground down. Winning or sparing sets `flags['gloam_resolved']`
-  and restores the Hearthlight.
-- **Trade in dialogue is opened with Ctrl/Cmd** (`ui/dialogue.py: TRADE_KEYS`), not I — I
-  collided with typing a message.
-- **Hostile NPCs:** an NPC's AI can emit `attack` mid-dialogue to turn hostile and start a
-  fight (persona-driven, so they can be talked down/spared too — and they *remember* being
-  spared or bested). `join_combat` makes an NPC a pledged ally who fights beside you
-  (`ally_pledged` flag); allies join via `combatant_from_npc`.
-- **Ridge creatures:** `gloamling` enemies ambush once on the ridge path (`path_cleared`
-  flag stops repeats). Multi-enemy fights use a target-selection submenu.
-- **Build order (all done):** Gloam boss → hostile NPCs + allies → ridge creatures.
-
-## Items, inventory & economy
-- **Catalog** (`engine/items.py`) is the closed set of real items — each with a display
-  name, description, coin `value`, and optional `use` behavior (`eat`/`drink` heal player
-  HP, `read` shows text, `key`). `use_item()` applies effects. Nothing off-catalog exists.
-- **Player HP** lives on `PlayerState` (hp/max_hp); food heals it. Seeds M2 combat.
-- **Inventory screen** — press **I** in the overworld (`ui/inventory.py: InventoryPanel`):
-  browse items, Use or Drop them. Dropped items become **ground items**
-  (`WorldState.ground_items`, rendered on the floor) that are picked up by walking onto
-  them.
-- **In-dialogue trade** — press **I** while talking (`TradePanel`): shows both inventories.
-  On your items: **Gift** / **Sell**. On theirs: **Ask for** / **Buy**.
-    - Gift and Ask route through the NPC's AI (they react in character; Ask lets them decide
-      via `offer_item`) — on-theme with the AI-driven design.
-    - Buy/Sell are **mechanical** at catalog `value` (`engine/trade.py`), so the economy is
-      deterministic and trackable. Coins are `coin` items; NPCs and the player hold coin
-      balances (player starts with a small purse). Currency is hidden from the actionable
-      item lists (wallet total shows in the header).
-    - In dialogue, **I** opens trade only when the input line is empty (so `i` can still be
-      typed mid-message).
-
-## Conventions / decisions
-- Per-NPC character files in `npc/characters/*.json` (personality, backstory, drives,
-  affinity seed). Per-NPC runtime memory is an append log; plan for summarization when it
-  grows.
-- Affinity is a numeric score the LLM nudges via `adjust_affinity {delta, reason}`;
-  category (hostile/wary/neutral/friendly) is derived.
-- **Persistence:** named save slots under `save/<name>.json`, each a bundle of the full
-  `WorldState` **plus every NPC's memory** (and NPC inventories), so a slot fully restores
-  a session. The in-game menu (**Esc**, `ui/menu.py`) offers Continue/Save/Load/Save As/
-  Save and Quit; the game continues from the most-recently-modified slot on launch and
-  autosaves to the current slot on exit. `runtime_memory/` is the live working copy
-  (write-through per turn); `NPCMemory.snapshot_all/restore_all` move it in/out of slots.
-  `main.py --fresh` wipes all saves + memory. Memory files are `{summary, entries}`; the
-  log auto-compacts via the LLM past a threshold (in the dialogue worker thread).
-- **Sprites** are built procedurally at low res and nearest-scaled (`ui/sprites.py`),
-  tinted per character; no binary art assets are committed.
-- **Oil is a real prerequisite:** lighting a lamp consumes an `oil_flask`; Wren reliably
-  grants 3 flasks with the starter quest (deterministic, not LLM-dependent). Content flavor
-  (NPCs *mentioning* oil) stays with the LLM; the mechanic stays in the engine.
-- Ask the user before big direction changes (new combat model, swapping the LLM
-  integration approach, major scope jumps).
-
-## Running
 ```bash
-.venv/bin/python main.py
+.venv/bin/python main.py            # run; continues from most-recent save slot
+.venv/bin/python main.py --fresh    # wipe ALL saves + runtime memory, start clean
 ```
+
+- Deps live in the project `.venv/`; always invoke Python as `.venv/bin/python` (Python 3.13).
+- Install: `.venv/bin/python -m pip install -r requirements.txt`.
+- **There is no test suite.** Verify changes by running the game. For headless/automated
+  checks, drive pygame with `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy` and dump a frame
+  with `pygame.image.save(screen, path)`, then read the PNG. Prefer importing engine
+  modules and asserting on `WorldState` for logic changes — the engine is UI-free and
+  testable without a window.
+- `settings.json` (gitignored) holds `{base_url, api_key, model}` for any OpenAI-compatible
+  endpoint. **It contains a live `sk-` key — never commit, print, or echo it.** Before any
+  commit, confirm `settings.json`, `save/`, `runtime_memory/`, and `.venv/` are unstaged.
+
+## Wrap-up workflow (when finishing a piece of work)
+
+- **Commit your work** (committing directly to `main` is how this project operates — the user
+  has authorized it). Keep the pre-commit secret check above.
+- **Clear the runtime state** so the next session/playthrough starts clean and no test-run
+  memory lingers: empty `runtime_memory/` and `save/` (they're gitignored, so this is a local
+  hygiene step, not a commit). Headless/live tests write real files into both — delete them
+  when done:
+  ```bash
+  rm -f runtime_memory/*.json save/*.json
+  ```
+
+## The core invariant (read this before touching NPC behavior)
+
+**The LLM never mutates game state directly.** Every NPC turn returns
+`{"dialogue": ..., "actions": [...]}` as JSON in the message content (we do *not* rely on
+the function-calling API — the endpoint is an arbitrary proxy). The engine then **validates
+each action against real world entities and drops anything ungrounded**, so emergent
+content can never corrupt the world or create uncompletable quests.
+
+Three layers enforce this, and changes usually touch all three:
+1. **`npc/actions.py`** — `ACTIONS` holds one prompt doc-block per action type; `ACTION_SETS`
+   maps each character **kind** (`main` | `vendor` | `minor`, from the character JSON's
+   `kind`) to the actions it may use, and `action_catalog(kind)` renders only those into the
+   prompt. `apply_actions()` validates + applies each action **and drops any not allowed for
+   that kind**, appending to `ActionResult.effects` (player-visible) or `.debug` (dropped).
+   To add an NPC capability you add a doc-block in `ACTIONS`, list it in the relevant
+   `ACTION_SETS`, and add a validated branch. (`join_combat` is a legacy alias of `join_party`.)
+2. **`engine/quests.py`** — quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
+   target must resolve via `KnownEntities`). `build_quest()` raises `QuestValidationError` for
+   ungrounded targets; `refresh_and_complete()` recomputes progress from world state every turn
+   and grants rewards. `KnownEntities` (rooms/npcs/items/interactable_kinds) is the whitelist
+   everything grounds against.
+3. **`engine/items.py`** — the item catalog is a **closed set**. NPCs can only `offer_item`
+   things actually in their own `inventory`; the LLM cannot invent items.
+
+## Architecture
+
+**`engine/` — the game, UI-free and the single source of truth.**
+- `state.py` — `WorldState` (npcs, player, quests, flags, world_facts, events, ground_items,
+  hearthlight, lamps, **`party`**). Dataclasses, serialized whole into save bundles.
+  `adjust_affinity`, `add_fact`, `lit_lamp_count`, `active_quests`, `add_to_party`/
+  `remove_from_party`/`in_party`, etc. live here. `party` is the ordered list of npc_ids
+  travelling with you — the single source of truth for companions (party members auto-join
+  every fight; the old `ally_pledged` flag is now just a legacy mirror).
+- `world.py` — the map: `Room`/`Door`, `new_world()` builds rooms + `KnownEntities` +
+  `NPC_SPAWNS`, `starter_quest()`, `ensure_world_complete()` (migrates older save bundles).
+  Rooms carry a `biome` (`"town"` | `"snow"`); the ridge is `path → ridge_foot → ridge_pass
+  → ridge_summit`. `GRID_W`/`GRID_H` define tile bounds.
+- `combat.py` — turn-based logic: `Combatant`, `Combat`, `make_combat`, `enemies_from_ids`,
+  the `ENEMIES` bestiary, `player_attack/defend/spare`, `enemy_attack`,
+  `ally_attack/ally_defend/ally_spare/ally_step`, `combatant_from_npc`. Pure logic;
+  `ui/combat.py` is the scene.
+- `quests.py`, `items.py`, `trade.py` (coin economy at catalog value — buy/sell mechanical,
+  gift/ask routed through the NPC AI), `journal.py` (`EventLog` on `world.events`; public
+  events feed NPC briefings *and* the player journal), `save.py` (named slots under `save/`,
+  each bundling the whole world **plus every NPC's memory + inventories**).
+
+**`npc/` — the LLM-driven brain.**
+- `agent.py` — a **LangGraph** `StateGraph`: `perceive` (build system/user prompt from the
+  character file + affinity + memory + a grounded `_world_briefing`) → `reason` (call LLM,
+  parse JSON) → `act` (validate/apply actions, refresh quests, write memory). Entry point
+  `npc_respond()`. The `APPROACH` sentinel = "player walked up"; it branches on
+  `memory.has_met()` (fixed the original "same greeting every visit" bug — the greeting
+  prompt simply wasn't told to use the in-context memory).
+- `combat_agent.py` — enemy turns and `mercy_attempt()` (free-text ACT). Persona enemies
+  react in character and adjust `resolve`; hitting what they truly want makes them
+  `spareable`. Non-persona creatures use rule-based fallbacks. **Companions** take
+  LLM-driven turns via `ally_turn()` (attack / defend / speak / spare, the same menu the
+  player has — a companion speaking to a foe can nudge its resolve), and `speak_to_ally()`
+  handles talking to a companion mid-fight. Everything degrades to mechanical behavior on
+  `LLMError` so a turn never stalls.
+- `memory.py` — per-NPC append log (`{summary, entries}`) in `runtime_memory/`, write-through
+  per turn; auto-compacts via the LLM past a threshold (`agent.summarize_memory`, run in the
+  dialogue worker thread). `snapshot_all`/`restore_all` move it in/out of save slots.
+- `characters/*.json` — personality, backstory, drives, secrets, affinity seed, inventory,
+  coins, and (for combatants) a `combat` block. `roster.py` loads them.
+
+**`llm/` —** `config.py` loads `settings.json`; `client.py` `complete_json()` calls the
+endpoint and parses JSON **defensively out of message content** (strips code fences, finds
+the JSON object), raising `LLMError` on failure.
+
+**`ui/` — pygame rendering + scenes (reads state, doesn't own it).**
+- `main.py` `Game` is the overworld loop and scene router (dialogue / combat / inventory /
+  journal / menu). Long LLM turns run on a **worker thread** with a spinner; only the
+  dialogue/combat box mutates state during a turn, the render loop only reads.
+- `render.py` (`draw_overworld` with per-biome palettes, `wrap_text` — lives here to avoid a
+  dialogue↔inventory import cycle), `dialogue.py`, `combat.py`, `inventory.py`
+  (`InventoryPanel` + in-conversation `TradePanel`), `party.py` (`PartyPanel`), `journal.py`,
+  `menu.py`, `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural low-res pixel art,
+  nearest-scaled; no binary art committed).
+- **Companions/party:** recruiting and parting are both **emergent** — a `main` NPC emits
+  `join_party` (or `leave_party`) and `world.party` changes. `main.py` trails party members
+  behind the player (`_place_followers` / `_gather_party`, a per-frame "snake" using
+  `self._trail`; `occupied()` lets you pass companions so they never wall you in). You **talk
+  to a companion from the party view** (`P` → Enter on `PartyPanel` opens a normal
+  conversation) — overworld `E` deliberately skips party members (`adjacent_targets`) so a
+  trailing follower doesn't perpetually snag it. A companion only leaves when you ask them to
+  in that conversation and they choose `leave_party` (they may `move_to` off somewhere as they
+  go). There is no menu "dismiss" button by design.
+
+## Controls / key routing gotchas
+
+- Overworld: Arrows/WASD move, **E** interact, **I** inventory, **P** party, **J** journal,
+  **Esc** menu.
+- **Trade inside a conversation opens with Ctrl/Cmd, not I** (`ui/dialogue.py: TRADE_KEYS`) —
+  `I` collided with typing a message. Don't reintroduce letter keys as commands in the
+  dialogue box.
+- **Combat ACT is a free-text speech box**, not a menu — the player types what they *say* and
+  it routes to `combat_agent.mercy_attempt` (or `speak_to_ally` when the target is a companion).
+- **You talk to party members through the party view (`P` → Enter), not `E`.** `E` in the
+  overworld skips companions on purpose.
+
+## Conventions
+
+- **Font tofu:** the bundled font lacks many glyphs. Use `•` and plain ASCII; do NOT use
+  `◆ ✔ ↑ ↓ ▸` etc. — they render as boxes.
+- Defeat is never a hard game-over — the player is knocked out and wakes safe.
+- Prerequisites that must be reliable are enforced in the **engine**, not left to the LLM
+  (e.g. lighting a lamp consumes an `oil_flask`; Wren deterministically grants flasks). Keep
+  *flavor* with the LLM, *mechanics* in the engine.
+- Ask the user before big direction changes (new combat model, swapping the LLM integration,
+  major scope jumps).
+
+## Part 2 — playable-game overhaul (in progress)
+
+A staged roadmap turning the framework into a real game, tracked in
+`~/.claude/plans/alright-to-quickly-catch-polymorphic-turing.md` and project memory
+(`memory/part2-overhaul.md`):
+
+- **Phase 1 (done)** — character **kinds** + action-set gating (see `npc/actions.py`).
+- **Phase 2 (done)** — **party & recruitment** with real ally combat AI (see the
+  Companions/party notes above).
+- **Phase 3** — quest **trees** + "commissioner" continuations (quests that branch and
+  continue; the giver's own agent designs the next stage). Default follow-up is *decide-later*.
+- **Phase 4** — functional **places**: camp (rest heals + advances a `day` + restocks),
+  storage, and a `vendor`-kind shop with per-day stock.
+- **Phase 5 (last)** — rebuild the map into a **linear** A→B→…→Ridge progression + light
+  ambient NPC wandering.
+
+Confirm scope with the user before starting a new phase.

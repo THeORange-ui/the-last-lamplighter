@@ -1,5 +1,6 @@
 {
     "id": "wren",
+    "kind": "main",
     "name": "Wren",
     "role": "the lamplighter's apprentice",
     "personality": "Earnest, anxious, dutiful. Talks quickly when nervous. Cares more than they let on. Hates the idea of the light going out on their watch.",
@@ -11,6 +12,7 @@
     "backstory": "Apprenticed to the old lamplighter Ansel for three years. One dusk Ansel climbed the ridge to see what was eating the light, and never returned. Wren has kept the lamps alone since, and is failing.",
     "speech_style": "Short, earnest sentences. Fidgets verbally: 'I mean—', 'it's just—'. Warm once they trust you.",
     "affinity_seed": 0,
+    "combat_stats": {"hp": 18, "attack": 4, "defense": 1, "resolve": 50},
     "inventory": ["oil_flask", "oil_flask", "oil_flask", "ridge_map"],
     "knowledge": [
         "The Hearthlight is failing and the town is in permanent dusk",

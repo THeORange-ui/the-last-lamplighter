@@ -33,9 +33,17 @@ cp settings.example.json settings.json   # then fill in your endpoint
 ```
 
 Move with **Arrows/WASD**, interact with **E**, open your **inventory** with **I**,
-the **journal** with **J**, and the **menu** with **Esc** (Continue / Save / Load /
-Save As / Save and Quit). Walk up to an NPC and press E to talk; type freely; press
-Enter to send.
+your **party** with **P**, the **journal** with **J**, and the **menu** with **Esc**
+(Continue / Save / Load / Save As / Save and Quit). Walk up to an NPC and press E to
+talk; type freely; press Enter to send.
+
+Ask a townsperson to travel with you and they may **join your party**: companions follow
+you room to room, fight at your side (each takes its own AI-driven turn — attack, guard,
+or *speak*, and a companion's words can even help talk a foe down), and you can address
+them mid-battle. Open the party view with **P** to see who's with you or part ways —
+they'll say goodbye and wander off somewhere of their own choosing. Different kinds of
+character offer different things: a main character can join you and give quests; lesser
+NPCs can only trade or share a word.
 
 In the inventory you can **Use** items (read the ridge map, eat food to heal) or
 **Drop** them on the ground. Press **Ctrl/Cmd** *during a conversation* to open a trade

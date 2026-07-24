@@ -16,7 +16,7 @@ from engine.state import GroundItem, NPCRuntime, PlayerState, WorldState
 ROOT = Path(__file__).resolve().parent.parent
 SAVE_DIR = ROOT / "save"
 AUTOSAVE = "autosave"        # default slot for new games / quick continue
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 
 
 def _sanitize(name: str) -> str:
@@ -101,6 +101,7 @@ def _world_to_dict(state: WorldState) -> dict:
                              "public": e.public} for e in state.events.events]},
         "ground_items": [{"room": g.room, "x": g.x, "y": g.y, "item": g.item}
                          for g in state.ground_items],
+        "party": list(state.party),
     }
 
 
@@ -137,6 +138,7 @@ def _world_from_dict(data: dict) -> WorldState:
         hearthlight=data.get("hearthlight", 60),
         events=log,
         ground_items=ground,
+        party=list(data.get("party", [])),
     )
 
 

@@ -15,34 +15,89 @@ from engine.quests import QuestValidationError, build_quest
 from engine.world import GRID_H, GRID_W, Room
 from npc.roster import character_name
 
-# Human-facing catalog injected into the NPC system prompt.
-ACTION_CATALOG = """\
-You may include zero or more of these actions. Only use them when they fit what
-your character would actually do this turn. Each is a JSON object in "actions":
+# --- the action vocabulary, one doc block per action type --------------------
+# These are injected into the NPC system prompt, filtered by the character's kind
+# (see ACTION_SETS / action_catalog). The engine only ever applies actions the
+# character's kind is allowed to use.
+ACTIONS: dict[str, str] = {
+    "adjust_affinity": (
+        '- {"type": "adjust_affinity", "delta": <int -25..25>, "reason": "<why>"}\n'
+        "    Nudge how you feel about the player. Positive = warmer, negative = colder."
+    ),
+    "give_quest": (
+        '- {"type": "give_quest", "quest": {\n'
+        '       "title": "<short>", "description": "<one sentence>",\n'
+        '       "objective": {"type": "reach|interact|fetch|deliver|talk_to",\n'
+        '                     "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},\n'
+        '       "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}\n'
+        "    Offer a task. The target MUST be a real entity listed in the world briefing."
+    ),
+    "offer_item": (
+        '- {"type": "offer_item", "item": "<item id you are CARRYING>"}\n'
+        "    Hand the player one item from your own inventory (listed in the briefing).\n"
+        "    You cannot give what you do not carry."
+    ),
+    "reveal_fact": (
+        '- {"type": "reveal_fact", "fact": "<a concrete fact you disclose>"}\n'
+        "    Share something true about the world/your past. Recorded to memory."
+    ),
+    "move_to": (
+        '- {"type": "move_to", "room": "<room id>"}\n'
+        "    Leave to go somewhere. This ends the conversation."
+    ),
+    "join_party": (
+        '- {"type": "join_party"}\n'
+        "    Join the player and travel with them — you become a companion who follows\n"
+        "    them through the world and fights at their side. Only if your character\n"
+        "    truly would throw in their lot with them."
+    ),
+    "leave_party": (
+        '- {"type": "leave_party"}\n'
+        "    Leave the player's company and go your own way. Use this ONLY when the player\n"
+        "    has asked you to part ways (or your character genuinely wants to). Say your\n"
+        "    goodbye in your dialogue, and you may add a move_to to walk off somewhere."
+    ),
+    "attack": (
+        '- {"type": "attack"}\n'
+        "    Turn hostile and attack the player RIGHT NOW. Only if your character truly\n"
+        "    would — this starts a fight. Use rarely and in-character."
+    ),
+    "end_dialogue": (
+        '- {"type": "end_dialogue"}\n'
+        "    End the conversation naturally."
+    ),
+}
 
-- {"type": "adjust_affinity", "delta": <int -25..25>, "reason": "<why>"}
-    Nudge how you feel about the player. Positive = warmer, negative = colder.
-- {"type": "give_quest", "quest": {
-       "title": "<short>", "description": "<one sentence>",
-       "objective": {"type": "reach|interact|fetch|deliver|talk_to",
-                     "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},
-       "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}
-    Offer a task. The target MUST be a real entity listed in the world briefing.
-- {"type": "offer_item", "item": "<item id you are CARRYING>"}
-    Hand the player one item from your own inventory (listed in the briefing).
-    You cannot give what you do not carry.
-- {"type": "reveal_fact", "fact": "<a concrete fact you disclose>"}
-    Share something true about the world/your past. Recorded to memory.
-- {"type": "move_to", "room": "<room id>"}
-    Leave to go somewhere. This ends the conversation.
-- {"type": "join_combat"}
-    Declare you'll fight beside the player if it comes to a fight (become an ally).
-- {"type": "attack"}
-    Turn hostile and attack the player RIGHT NOW. Only if your character truly would —
-    this starts a fight. Use rarely and in-character.
-- {"type": "end_dialogue"}
-    End the conversation naturally.
-"""
+# Which actions each kind of character may use. A `main` character is a full agent
+# (quests, companionship, the works); a `vendor` mostly trades; a `minor` throwaway
+# NPC can only colour a scene and share a fact.
+ACTION_SETS: dict[str, list[str]] = {
+    "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact",
+             "move_to", "join_party", "leave_party", "attack", "end_dialogue"],
+    "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "end_dialogue"],
+    "minor": ["adjust_affinity", "reveal_fact", "end_dialogue"],
+}
+
+# Legacy action aliases → their current name (kept so older prompts/saves still work).
+ACTION_ALIASES = {"join_combat": "join_party"}
+
+_CATALOG_HEADER = (
+    "You may include zero or more of these actions. Only use them when they fit what\n"
+    'your character would actually do this turn. Each is a JSON object in "actions":\n'
+)
+
+
+def allowed_actions(kind: str) -> set[str]:
+    """The set of action types a character of this kind may use (aliases resolved)."""
+    return set(ACTION_SETS.get(kind, ACTION_SETS["main"]))
+
+
+def action_catalog(kind: str = "main") -> str:
+    """Render the prompt catalog with only the actions this kind is allowed to use."""
+    allowed = ACTION_SETS.get(kind, ACTION_SETS["main"])
+    blocks = [ACTIONS[a] for a in allowed if a in ACTIONS]
+    return _CATALOG_HEADER + "\n" + "\n".join(blocks) + "\n"
+
 
 _AFFINITY_CLAMP = 25
 _MAX_ACTIONS = 6
@@ -55,6 +110,8 @@ class ActionResult:
     end_dialogue: bool = False
     wants_combat: bool = False     # NPC pledged to fight as an ally
     starts_combat: bool = False    # NPC turned hostile and attacks now
+    joined_party: bool = False     # NPC just joined the travelling party
+    left_party: bool = False       # NPC just left the travelling party
 
 
 def _free_interior_tile(room: Room, blocked: set[tuple[int, int]]) -> tuple[int, int]:
@@ -71,10 +128,22 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
     if not isinstance(actions, list):
         return result
 
+    # Gate by character kind: an action this kind may not use is dropped, never applied.
+    from npc.roster import load_character
+    try:
+        kind = load_character(npc_id).get("kind", "main")
+    except KeyError:
+        kind = "main"
+    allowed = allowed_actions(kind)
+
     for raw in actions[:_MAX_ACTIONS]:
         if not isinstance(raw, dict):
             continue
         atype = str(raw.get("type", "")).strip()
+        atype = ACTION_ALIASES.get(atype, atype)   # normalize legacy names
+        if atype and atype not in allowed:
+            result.debug.append(f"dropped {atype!r}: not allowed for a {kind} character")
+            continue
 
         if atype == "adjust_affinity":
             try:
@@ -133,10 +202,21 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             result.effects.append(f"{name} leaves for {room.name}.")
             result.end_dialogue = True
 
-        elif atype == "join_combat":
-            state.npcs[npc_id].flags["ally_pledged"] = True
-            result.wants_combat = True
-            result.effects.append(f"{name} vows to stand with you when it comes to a fight.")
+        elif atype == "join_party":
+            if state.add_to_party(npc_id):
+                state.npcs[npc_id].flags["ally_pledged"] = True   # legacy mirror
+                result.joined_party = True
+                result.wants_combat = True
+                state.events.record("party", f"{name} joined you.", public=True)
+                result.effects.append(f"{name} takes up beside you — a companion now.")
+
+        elif atype == "leave_party":
+            if state.remove_from_party(npc_id):
+                state.npcs[npc_id].flags.pop("ally_pledged", None)
+                result.left_party = True
+                result.end_dialogue = True
+                state.events.record("party", f"{name} left your company.", public=True)
+                result.effects.append(f"{name} parts ways with you.")
 
         elif atype == "attack":
             result.starts_combat = True
