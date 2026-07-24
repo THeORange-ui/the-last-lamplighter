@@ -83,23 +83,30 @@ Three layers enforce this, and changes usually touch all three:
 
 **`engine/` — the game, UI-free and the single source of truth.**
 - `state.py` — `WorldState` (npcs, player, quests, flags, world_facts, events, ground_items,
-  hearthlight, lamps, **`party`**). Dataclasses, serialized whole into save bundles.
-  `adjust_affinity`, `add_fact`, `lit_lamp_count`, `active_quests`, `add_to_party`/
-  `remove_from_party`/`in_party`, etc. live here. `party` is the ordered list of npc_ids
-  travelling with you — the single source of truth for companions (party members auto-join
-  every fight; the old `ally_pledged` flag is now just a legacy mirror).
+  hearthlight, lamps, **`party`**, **`day`**, **`storage`**). Dataclasses, serialized whole
+  into save bundles. `adjust_affinity`, `add_fact`, `lit_lamp_count`, `active_quests`,
+  `add_to_party`/`remove_from_party`/`in_party`, `heal_player`, etc. live here. `party` is the
+  ordered list of npc_ids travelling with you (party members auto-join every fight; the old
+  `ally_pledged` flag is now just a legacy mirror). `day` advances when you rest at the camp;
+  `storage` is the camp chest's contents.
 - `world.py` — the map: `Room`/`Door`, `new_world()` builds rooms + `KnownEntities` +
-  `NPC_SPAWNS`, `starter_quest()`, `ensure_world_complete()` (migrates older save bundles).
-  Rooms carry a `biome` (`"town"` | `"snow"`); the ridge is `path → ridge_foot → ridge_pass
-  → ridge_summit`. `GRID_W`/`GRID_H` define tile bounds.
+  `NPC_SPAWNS`, `starter_quest()`, `ensure_world_complete()` (migrates older save bundles —
+  seeds/prunes lamps, relocates anyone stranded by a map change). The map is a **linear main
+  line** `square → tavern → market → road → camp → ridge_foot → ridge_pass → ridge_summit`
+  with two optional forks (`home`/Perrin off the road, `cellar` off the tavern). Rooms carry a
+  `biome` (`"town"` | `"snow"` | `"camp"`) and `fixtures` (`(x,y) -> "campfire"|"chest"`); the
+  three starter lamps sit in the first three rooms. `GRID_W`/`GRID_H` define tile bounds.
 - `combat.py` — turn-based logic: `Combatant`, `Combat`, `make_combat`, `enemies_from_ids`,
   the `ENEMIES` bestiary, `player_attack/defend/spare`, `enemy_attack`,
   `ally_attack/ally_defend/ally_spare/ally_step`, `combatant_from_npc`. Pure logic;
   `ui/combat.py` is the scene.
-- `quests.py`, `items.py`, `trade.py` (coin economy at catalog value — buy/sell mechanical,
-  gift/ask routed through the NPC AI), `journal.py` (`EventLog` on `world.events`; public
-  events feed NPC briefings *and* the player journal), `save.py` (named slots under `save/`,
-  each bundling the whole world **plus every NPC's memory + inventories**).
+- `quests.py`, `items.py`, `trade.py` (coin economy — `buy_from_npc`/`sell_to_npc` at catalog
+  value for AI gift/ask; **`shop_buy`/`shop_sell` add a margin** (`SHOP_MARKUP`/
+  `SHOP_SELL_FACTOR`) for `vendor` NPCs, whose stock `restock_vendor(state, id, day)` refills
+  once per day from `VENDOR_STOCK` + a day-rotated special + a coin float), `journal.py`
+  (`EventLog` on `world.events`; public events feed NPC briefings *and* the player journal),
+  `save.py` (named slots under `save/`, each bundling the whole world **plus every NPC's
+  memory + inventories**).
 
 **`npc/` — the LLM-driven brain.**
 - `agent.py` — a **LangGraph** `StateGraph`: `perceive` (build system/user prompt from the
@@ -129,11 +136,17 @@ the JSON object), raising `LLMError` on failure.
 - `main.py` `Game` is the overworld loop and scene router (dialogue / combat / inventory /
   journal / menu). Long LLM turns run on a **worker thread** with a spinner; only the
   dialogue/combat box mutates state during a turn, the render loop only reads.
-- `render.py` (`draw_overworld` with per-biome palettes, `wrap_text` — lives here to avoid a
-  dialogue↔inventory import cycle), `dialogue.py`, `combat.py`, `inventory.py`
-  (`InventoryPanel` + in-conversation `TradePanel`), `party.py` (`PartyPanel`), `journal.py`,
-  `menu.py`, `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural low-res pixel art,
+- `render.py` (`draw_overworld` with per-biome palettes + fixtures, HUD day, `wrap_text` —
+  lives here to avoid a dialogue↔inventory import cycle), `dialogue.py`, `combat.py`,
+  `inventory.py` (`InventoryPanel` + in-conversation `TradePanel`), `shop.py` (`ShopPanel` —
+  vendors, margin prices; opened by the trade key when talking to a `vendor`), `storage.py`
+  (`StoragePanel` — the camp chest), `party.py` (`PartyPanel`), `journal.py`, `menu.py`,
+  `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural low-res pixel art,
   nearest-scaled; no binary art committed).
+- **Places & the day:** the camp room has `campfire`/`chest` fixtures (`main.interact` →
+  `rest_at_camp` heals + `day++` + restocks vendors; chest → `StoragePanel`). Idle NPCs wander
+  via `main._ambient_step` (pace + occasionally hop one room, home-biased; **vendors and the
+  ridge are excluded** so the shop stays findable and townsfolk don't stray onto the mountain).
 - **Companions/party:** recruiting and parting are both **emergent** — a `main` NPC emits
   `join_party` (or `leave_party`) and `world.party` changes. `main.py` trails party members
   behind the player (`_place_followers` / `_gather_party`, a per-frame "snake" using
@@ -150,7 +163,10 @@ the JSON object), raising `LLMError` on failure.
   **Esc** menu.
 - **Trade inside a conversation opens with Ctrl/Cmd, not I** (`ui/dialogue.py: TRADE_KEYS`) —
   `I` collided with typing a message. Don't reintroduce letter keys as commands in the
-  dialogue box.
+  dialogue box. For a `vendor` NPC the same key opens the **`ShopPanel`** (margin buy/sell)
+  instead of the barter `TradePanel`.
+- **Camp fixtures use `E`** (`main.adjacent_targets` returns `("fixture", kind)`): the campfire
+  rests you (heal + new day + restock), the chest opens storage.
 - **Combat ACT is a free-text speech box**, not a menu — the player types what they *say* and
   it routes to `combat_agent.mercy_attempt` (or `speak_to_ally` when the target is a companion).
 - **You talk to party members through the party view (`P` → Enter), not `E`.** `E` in the
@@ -182,9 +198,10 @@ A staged roadmap turning the framework into a real game, tracked in
 - **Phase 3 (done)** — quest **trees** + "commissioner" continuations (see the quest-tree
   note under the core invariant). Default follow-up is *decide-later*; the starter lamp quest
   now chains into whatever Wren decides next.
-- **Phase 4** — functional **places**: camp (rest heals + advances a `day` + restocks),
-  storage, and a `vendor`-kind shop with per-day stock.
-- **Phase 5 (last)** — rebuild the map into a **linear** A→B→…→Ridge progression + light
-  ambient NPC wandering.
+- **Phase 4 (done)** — functional **places**: the camp (rest heals + advances `world.day` +
+  restocks vendors) with storage, and Sella as a `vendor`-kind shop with margin pricing +
+  per-day stock (`engine/trade.py`, `ui/shop.py`, `ui/storage.py`).
+- **Phase 5 (done)** — the map is now a **linear** main line + two optional forks (see
+  `world.py`), with home-biased ambient NPC wandering (`main._ambient_step`).
 
-Confirm scope with the user before starting a new phase.
+Part 2 is complete. Confirm scope with the user before starting new major work.

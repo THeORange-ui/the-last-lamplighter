@@ -72,6 +72,8 @@ class WorldState:
     events: EventLog = field(default_factory=EventLog)      # shared world event log
     ground_items: list = field(default_factory=list)        # list[GroundItem]
     party: list[str] = field(default_factory=list)          # npc_ids travelling with you
+    day: int = 1                                             # advances when you rest at camp
+    storage: list[str] = field(default_factory=list)         # items stashed in the camp chest
 
     # --- party ------------------------------------------------------------
     def in_party(self, npc_id: str) -> bool:

@@ -1,8 +1,8 @@
 {
     "id": "sella",
-    "kind": "main",
+    "kind": "vendor",
     "name": "Sella",
-    "role": "a traveling scavenger",
+    "role": "a traveling scavenger who keeps a market stall",
     "personality": "Sharp, transactional, quick-witted. Everything has a price. Not cruel — just done with places that die. Respects competence.",
     "drives": [
         "Turn a profit and leave before the light dies",

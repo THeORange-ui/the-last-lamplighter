@@ -41,10 +41,12 @@ class Room:
     lamps: dict[str, tuple[int, int]] = field(default_factory=dict)
     obstacles: set[tuple[int, int]] = field(default_factory=set)
     hearthlight: tuple[int, int] | None = None
-    biome: str = "town"          # "town" | "snow" — drives the room's palette
+    biome: str = "town"          # "town" | "snow" | "camp" — drives the room's palette
+    # Interactable fixtures keyed by tile: (x, y) -> kind ("campfire" | "chest").
+    fixtures: dict[tuple[int, int], str] = field(default_factory=dict)
 
     def blocked(self) -> set[tuple[int, int]]:
-        """Static blocked tiles: border walls (minus doors) + obstacles."""
+        """Static blocked tiles: border walls (minus doors) + obstacles + fixtures."""
         walls: set[tuple[int, int]] = set()
         for x in range(GRID_W):
             walls.add((x, 0))
@@ -55,6 +57,7 @@ class Room:
         for d in self.doors:
             walls.discard((d.x, d.y))
         walls |= self.obstacles
+        walls |= set(self.fixtures)
         if self.hearthlight:
             walls.add(self.hearthlight)
         return walls
@@ -65,50 +68,79 @@ class Room:
     def lamp_at(self, x: int, y: int) -> str | None:
         return next((lid for lid, (lx, ly) in self.lamps.items() if (lx, ly) == (x, y)), None)
 
+    def fixture_at(self, x: int, y: int) -> str | None:
+        return self.fixtures.get((x, y))
+
 
 def build_rooms() -> dict[str, Room]:
-    # The square is the hub; each neighbouring room hangs off one of its edges.
+    # A linear main line town -> ridge, with two optional forks (Perrin's house off
+    # the road, a supply cellar off the tavern). Left/right doors carry the spine;
+    # top/bottom doors are the forks.
+    R = GRID_W - 1
+    MIDY = 6
+
     square = Room(
         id="square",
         name="Town Square",
         hearthlight=(9, 6),
         lamps={"lamp_square": (4, 3)},
-        doors=[
-            Door(x=GRID_W - 1, y=6, to_room="tavern", spawn=(1, 6)),
-            Door(x=0, y=6, to_room="market", spawn=(GRID_W - 2, 6)),
-            Door(x=9, y=0, to_room="home", spawn=(9, GRID_H - 2)),
-            Door(x=9, y=GRID_H - 1, to_room="path", spawn=(9, 1)),
-        ],
+        doors=[Door(x=R, y=MIDY, to_room="tavern", spawn=(1, MIDY))],
     )
     tavern = Room(
         id="tavern",
         name="The Ember Tavern",
         lamps={"lamp_tavern": (14, 9)},
-        obstacles={(3, 3), (4, 3), (5, 3)},  # the bar counter
-        doors=[Door(x=0, y=6, to_room="square", spawn=(GRID_W - 2, 6))],
+        obstacles={(3, 3), (4, 3), (5, 3)},       # the bar counter
+        doors=[
+            Door(x=0, y=MIDY, to_room="square", spawn=(R - 1, MIDY)),
+            Door(x=R, y=MIDY, to_room="market", spawn=(1, MIDY)),
+            Door(x=9, y=GRID_H - 1, to_room="cellar", spawn=(9, 1)),   # fork
+        ],
+    )
+    cellar = Room(
+        id="cellar",
+        name="The Tavern Cellar",
+        obstacles={(4, 4), (5, 4), (13, 8), (14, 8)},   # barrels and crates
+        doors=[Door(x=9, y=0, to_room="tavern", spawn=(9, GRID_H - 2))],
     )
     market = Room(
         id="market",
         name="The Dusk Market",
-        obstacles={(12, 4), (13, 4), (14, 4),   # a scavenger's stall
-                   (4, 8), (5, 8)},              # stacked crates
-        doors=[Door(x=GRID_W - 1, y=6, to_room="square", spawn=(1, 6))],
+        lamps={"lamp_market": (4, 3)},
+        obstacles={(12, 4), (13, 4), (14, 4),     # Sella's stall
+                   (4, 8), (5, 8)},                # stacked crates
+        doors=[
+            Door(x=0, y=MIDY, to_room="tavern", spawn=(R - 1, MIDY)),
+            Door(x=R, y=MIDY, to_room="road", spawn=(1, MIDY)),
+        ],
+    )
+    road = Room(
+        id="road",
+        name="The Old Road",
+        obstacles={(6, 4), (12, 9)},              # roadside rocks
+        doors=[
+            Door(x=0, y=MIDY, to_room="market", spawn=(R - 1, MIDY)),
+            Door(x=R, y=MIDY, to_room="camp", spawn=(1, MIDY)),
+            Door(x=9, y=0, to_room="home", spawn=(9, GRID_H - 2)),      # fork
+        ],
     )
     home = Room(
         id="home",
         name="Perrin's House",
-        obstacles={(7, 8), (8, 8),               # a table
-                   (13, 3), (14, 3)},            # a cold hearth / shelf
-        doors=[Door(x=9, y=GRID_H - 1, to_room="square", spawn=(9, 1))],
+        obstacles={(7, 8), (8, 8),                # a table
+                   (13, 3), (14, 3)},             # a cold hearth / shelf
+        doors=[Door(x=9, y=GRID_H - 1, to_room="road", spawn=(9, 1))],
     )
-    path = Room(
-        id="path",
-        name="The Ridge Path",
-        lamps={"lamp_path": (9, 4)},
+    camp = Room(
+        id="camp",
+        name="The Waystation",
+        biome="camp",
+        fixtures={(9, 6): "campfire", (6, 8): "chest"},
+        obstacles={(13, 4), (14, 4)},             # a lean-to
         doors=[
-            Door(x=9, y=0, to_room="square", spawn=(9, GRID_H - 2)),
+            Door(x=0, y=MIDY, to_room="road", spawn=(R - 1, MIDY)),
             # Gating (read the map + lamps lit) is enforced in main.try_move.
-            Door(x=9, y=GRID_H - 1, to_room="ridge_foot", spawn=(9, 1)),
+            Door(x=R, y=MIDY, to_room="ridge_foot", spawn=(1, MIDY)),
         ],
     )
     # --- the ridge: a small snow-swept climb, the Gloam waiting at the top ---
@@ -118,7 +150,7 @@ def build_rooms() -> dict[str, Room]:
         biome="snow",
         obstacles={(4, 4), (14, 8)},              # snow-buried rocks
         doors=[
-            Door(x=9, y=0, to_room="path", spawn=(9, GRID_H - 2)),
+            Door(x=0, y=MIDY, to_room="camp", spawn=(R - 1, MIDY)),
             Door(x=9, y=GRID_H - 1, to_room="ridge_pass", spawn=(9, 1)),
         ],
     )
@@ -138,7 +170,8 @@ def build_rooms() -> dict[str, Room]:
         biome="snow",
         doors=[Door(x=9, y=0, to_room="ridge_pass", spawn=(9, GRID_H - 2))],
     )
-    rooms = (square, tavern, market, home, path, ridge_foot, ridge_pass, ridge_summit)
+    rooms = (square, tavern, cellar, market, road, home, camp,
+             ridge_foot, ridge_pass, ridge_summit)
     return {r.id: r for r in rooms}
 
 
@@ -162,8 +195,12 @@ def known_entities(rooms: dict[str, Room], npc_ids) -> KnownEntities:
 
 
 def ensure_world_complete(state: WorldState) -> None:
-    """Add any NPCs/lamps introduced since a save was written (forward-compat)."""
+    """Migrate an older save bundle forward: add new NPCs, seed current lamps, drop
+    lamps/rooms that no longer exist, and relocate anyone stranded by a map change."""
     from npc.roster import load_character
+
+    rooms = build_rooms()
+    valid_lamps = {lid for r in rooms.values() for lid in r.lamps}
 
     for nid, (room, x, y) in NPC_SPAWNS.items():
         if nid not in state.npcs:
@@ -172,9 +209,21 @@ def ensure_world_complete(state: WorldState) -> None:
             except KeyError:
                 inv = []
             state.npcs[nid] = NPCRuntime(npc_id=nid, room=room, x=x, y=y, inventory=inv)
-    for room in build_rooms().values():
-        for lamp_id in room.lamps:
-            state.lamps.setdefault(lamp_id, False)
+
+    # Seed lamps for all current rooms; forget lamps whose room was retired (else the
+    # ridge could never open, needing a lamp with no tile to relight).
+    for lid in valid_lamps:
+        state.lamps.setdefault(lid, False)
+    for lid in [l for l in state.lamps if l not in valid_lamps]:
+        del state.lamps[lid]
+
+    # Relocate the player / any NPC left in a room that no longer exists.
+    if state.player.room not in rooms:
+        state.player.room, state.player.x, state.player.y = "square", 9, 8
+    for nid, npc in state.npcs.items():
+        if npc.room not in rooms:
+            room, x, y = NPC_SPAWNS.get(nid, ("square", 9, 6))
+            npc.room, npc.x, npc.y = room, x, y
 
 
 def starter_quest() -> Quest:
@@ -217,6 +266,11 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
         ground_items=[
             GroundItem("ridge_pass", 3, 3, "tonic"),          # a supply to find
             GroundItem("ridge_foot", 5, 8, "worn_staff"),     # Ansel's staff, on the ridge
+            GroundItem("cellar", 6, 8, "oil_flask"),          # the off-path supply cache
+            GroundItem("cellar", 12, 4, "bread"),
         ],
     )
+    from engine.trade import restock_vendor          # seed the shop's opening stock
+    for nid in npcs:
+        restock_vendor(state, nid, state.day)
     return state, rooms, known_entities(rooms, npc_ids)

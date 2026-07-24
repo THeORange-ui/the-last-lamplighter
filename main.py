@@ -5,6 +5,7 @@ Run:  .venv/bin/python main.py           (persists NPC memory across runs)
 """
 from __future__ import annotations
 
+import random
 import sys
 
 import pygame
@@ -15,6 +16,8 @@ from engine.quests import refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
 from engine.state import GroundItem
+from engine.trade import is_vendor, restock_vendor
+from engine.world import NPC_SPAWNS
 from engine.world import ensure_world_complete, new_world, starter_quest
 from npc.memory import NPCMemory
 from npc.roster import character_name
@@ -25,10 +28,19 @@ from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
 from ui.menu import Menu
 from ui.party import PartyPanel
+from ui.storage import StoragePanel
 from ui.render import draw_hud, draw_overworld, draw_text
 
 MOVE_DELAY = 0.12   # seconds between grid steps while a direction is held
 TOAST_TIME = 2.6
+
+# --- ambient NPC wandering ---
+AMBIENT_TICK = 0.8          # seconds between wander ticks
+P_PACE = 0.5               # chance an NPC paces to a nearby tile on a tick
+P_HOP_FROM_HOME = 0.12     # chance an NPC drifts into an adjacent room
+P_RETURN_HOME = 0.5        # chance an away NPC heads back toward its home room
+# Townsfolk never wander onto the ridge.
+AMBIENT_BLOCKED_ROOMS = {"ridge_foot", "ridge_pass", "ridge_summit"}
 
 DIRS = {
     pygame.K_LEFT: (-1, 0), pygame.K_a: (-1, 0),
@@ -79,7 +91,10 @@ class Game:
         self.toast_timer = 0.0
         self.party_open = False
         self.party_panel: PartyPanel | None = None
+        self.storage_open = False
+        self.storage_panel: StoragePanel | None = None
         self._trail: list[tuple[int, int]] = []   # player's recent tiles (for followers)
+        self._ambient_timer = 0.0
         self.running = True
         self._gather_party()
 
@@ -187,6 +202,9 @@ class Game:
             lamp = room.lamp_at(tx, ty)
             if lamp:
                 return ("lamp", lamp)
+            fixture = room.fixture_at(tx, ty)
+            if fixture:
+                return ("fixture", fixture)
             door = room.door_at(tx, ty)
             if door and door.locked:
                 return ("locked", door.locked_msg)
@@ -198,6 +216,8 @@ class Game:
             return f"E: talk to {character_name(ident)}"
         if kind == "lamp":
             return "E: relight lamp" if not self.world.lamps.get(ident) else ""
+        if kind == "fixture":
+            return {"campfire": "E: rest by the fire", "chest": "E: open the chest"}.get(ident, "")
         if kind == "locked":
             return "the ridge path is sealed"
         return ""
@@ -302,6 +322,54 @@ class Game:
                 npc.x, npc.y = spot
                 taken.add(spot)
         self._reset_trail()
+
+    # --- ambient NPC wandering -------------------------------------------
+    def _ambient_step(self, dt):
+        """Idle NPCs pace about and occasionally drift a room over (biased home).
+        Party members, vendors, and the ridge are left alone."""
+        self._ambient_timer -= dt
+        if self._ambient_timer > 0:
+            return
+        self._ambient_timer = AMBIENT_TICK
+        pr = self.world.player.room
+        ppos = (self.world.player.x, self.world.player.y)
+        for nid, npc in self.world.npcs.items():
+            if nid in self.world.party or is_vendor(nid):
+                continue
+            home = NPC_SPAWNS.get(nid, (npc.room,))[0]
+            room = self.rooms[npc.room]
+            if npc.room != home:
+                back = next((d for d in room.doors if d.to_room == home), None)
+                if back and random.random() < P_RETURN_HOME:
+                    self._npc_through_door(npc, back, pr, ppos)
+                    continue
+                self._npc_pace(npc, pr, ppos)
+            elif random.random() < P_HOP_FROM_HOME:
+                doors = [d for d in room.doors
+                         if not d.locked and d.to_room not in AMBIENT_BLOCKED_ROOMS]
+                if doors:
+                    self._npc_through_door(npc, random.choice(doors), pr, ppos)
+                else:
+                    self._npc_pace(npc, pr, ppos)
+            elif random.random() < P_PACE:
+                self._npc_pace(npc, pr, ppos)
+
+    def _npc_pace(self, npc, player_room, ppos):
+        dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        random.shuffle(dirs)
+        for dx, dy in dirs:
+            t = (npc.x + dx, npc.y + dy)
+            if npc.room == player_room and t == ppos:
+                continue
+            if self._walkable(npc.room, t):
+                npc.x, npc.y = t
+                return
+
+    def _npc_through_door(self, npc, door, player_room, ppos):
+        npc.room = door.to_room
+        taken = {ppos} if door.to_room == player_room else set()
+        spot = self._nearest_free(door.to_room, door.spawn[0], door.spawn[1], taken)
+        npc.x, npc.y = spot if spot else door.spawn
 
     def try_pickup(self):
         p = self.world.player
@@ -411,7 +479,8 @@ class Game:
             return
         if outcome == "fled":
             if ctx["type"] in ("creature", "gloam"):
-                w.player.room, w.player.x, w.player.y = "path", 9, 11
+                w.player.room, w.player.x, w.player.y = "camp", 9, 6
+                self._gather_party()
                 self.set_toast("You scramble back down the ridge.")
             else:
                 if ctx["type"] == "npc":
@@ -465,8 +534,24 @@ class Game:
                 self.world.events.record("lamp_lit", f"You relit a lamp in {room.name}.")
                 self.set_toast("You pour the oil and coax the lamp back to light.")
                 self.on_quests_completed(refresh_and_complete(self.world, self.known))
+        elif kind == "fixture":
+            if ident == "campfire":
+                self.rest_at_camp()
+            elif ident == "chest":
+                self.storage_panel = StoragePanel(self.world)
+                self.storage_open = True
         elif kind == "locked":
             self.set_toast(ident)
+
+    def rest_at_camp(self):
+        w = self.world
+        healed = w.heal_player(w.player.max_hp)
+        w.day += 1
+        for nid in self.world.npcs:
+            restock_vendor(w, nid, w.day)   # only vendors actually restock
+        w.events.record("rest", f"You rested at the Waystation. Day {w.day} begins.")
+        self.set_toast(f"You rest by the fire. Day {w.day}."
+                       + (f"  (+{healed} HP)" if healed else ""))
 
     def open_dialogue(self, npc_id):
         # Deterministic onboarding: Wren always has the starter quest to give,
@@ -515,6 +600,10 @@ class Game:
                 cmd = self.party_panel.handle_event(event)
                 if cmd:
                     self.handle_party_command(cmd)
+            elif self.storage_open:
+                cmd = self.storage_panel.handle_event(event)
+                if cmd and cmd.get("cmd") == "close":
+                    self.storage_open = False
             elif self.scene == "intro":
                 if event.type == pygame.KEYDOWN:
                     self.scene = "overworld"
@@ -555,7 +644,7 @@ class Game:
         if self.menu_open:
             self.menu.update(dt)
             return
-        if self.inventory_open or self.party_open:
+        if self.inventory_open or self.party_open or self.storage_open:
             return
 
         if self.scene == "overworld" and not self.journal_open:
@@ -567,6 +656,7 @@ class Game:
                         self.try_move(dx, dy)
                         self.move_timer = MOVE_DELAY
                         break
+            self._ambient_step(dt)
         elif self.scene == "dialogue" and self.dialogue:
             self.dialogue.update(dt)
             if self.dialogue.finished:
@@ -604,6 +694,8 @@ class Game:
             self.inv_panel.draw(self.screen)
         if self.party_open and self.party_panel:
             self.party_panel.draw(self.screen)
+        if self.storage_open and self.storage_panel:
+            self.storage_panel.draw(self.screen)
         if self.menu_open:
             self.menu.draw(self.screen, self.save_name)
 

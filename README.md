@@ -51,6 +51,13 @@ view with both inventories: **Gift** or **Sell** your items, **Ask for** or **Bu
 Gifting and asking go through the NPC's own judgement; buying and selling use coins at
 fixed catalog prices.
 
+The world runs as a **main line** from the town out to the ridge —
+Square → Tavern → Market → the Old Road → the Waystation camp → the ridge — with a couple of
+optional side rooms to explore. **Sella** keeps a market stall: press **Ctrl/Cmd** at her to
+**shop** (buy from her daily stock, sell your finds — she takes a margin). At the **camp**,
+rest by the fire to heal, pass to the next **day** (which restocks the shop), or stash things
+in the **chest**. Townsfolk drift about their part of town as you play.
+
 Read Ansel's ridge map and light every lamp, and the ridge path opens — a snow-swept climb
 with creatures to fight (or spare) and, at the summit, the Gloam. In combat, **Act** opens
 a free-text box: you say something to the enemy, and it answers. Reach what it truly wants

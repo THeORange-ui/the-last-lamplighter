@@ -104,6 +104,8 @@ def _world_to_dict(state: WorldState) -> dict:
         "ground_items": [{"room": g.room, "x": g.x, "y": g.y, "item": g.item}
                          for g in state.ground_items],
         "party": list(state.party),
+        "day": state.day,
+        "storage": list(state.storage),
     }
 
 
@@ -141,6 +143,8 @@ def _world_from_dict(data: dict) -> WorldState:
         events=log,
         ground_items=ground,
         party=list(data.get("party", [])),
+        day=data.get("day", 1),
+        storage=list(data.get("storage", [])),
     )
 
 

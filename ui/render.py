@@ -91,6 +91,22 @@ def draw_overworld(screen, world, rooms):
         screen.blit(spr, (lx * T.TILE + (T.TILE - spr.get_width()) // 2,
                           ly * T.TILE + (T.TILE - spr.get_height())))
 
+    # camp fixtures (campfire, chest)
+    for (fx, fy), kind in getattr(room, "fixtures", {}).items():
+        cx, cy = fx * T.TILE + T.TILE // 2, fy * T.TILE + T.TILE // 2
+        if kind == "campfire":
+            _draw_glow(screen, (cx, cy), int(T.TILE * 1.1), T.LAMP_GLOW, 80)
+            pygame.draw.circle(screen, (86, 66, 54), (cx, cy + 7), int(T.TILE * 0.30))
+            pygame.draw.circle(screen, T.HEARTH, (cx, cy), int(T.TILE * 0.22))
+            pygame.draw.circle(screen, (255, 232, 156), (cx, cy - 3), int(T.TILE * 0.10))
+        elif kind == "chest":
+            r = _tile_rect(fx, fy).inflate(-8, -12)
+            pygame.draw.rect(screen, (120, 86, 50), r, border_radius=3)
+            pygame.draw.rect(screen, (150, 110, 66), (r.x, r.y, r.w, r.height // 2),
+                             border_radius=3)
+            pygame.draw.rect(screen, (60, 44, 26), r, 2, border_radius=3)
+            pygame.draw.rect(screen, (230, 200, 120), (r.centerx - 2, r.centery - 1, 4, 5))
+
     # dropped items on the floor
     for g in world.ground_items_in(room.id):
         icon = sprites.item_icon(g.item)
@@ -140,7 +156,8 @@ def draw_hud(screen, world, rooms, hint=""):
     draw_text(screen, room.name, (14, T.PLAY_H + 8), T.font(20, bold=True), T.TEXT)
     lit = world.lit_lamp_count()
     p = world.player
-    draw_text(screen, f"HP {p.hp}/{p.max_hp}   Lamps {lit}/{len(world.lamps)}   "
+    draw_text(screen, f"Day {getattr(world, 'day', 1)}   HP {p.hp}/{p.max_hp}   "
+                      f"Lamps {lit}/{len(world.lamps)}   "
                       f"Hearthlight {world.hearthlight}/100",
               (14, T.PLAY_H + 34), T.font(15), T.TEXT_DIM)
 

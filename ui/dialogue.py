@@ -15,9 +15,10 @@ from engine.items import display_name
 from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from npc.agent import APPROACH, npc_respond
-from npc.roster import character_name
+from npc.roster import character_name, load_character
 from ui import theme as T
 from ui.inventory import TradePanel
+from ui.shop import ShopPanel
 from ui.render import draw_text, wrap_text
 
 REVEAL_CPS = 55          # characters per second for the typewriter
@@ -50,6 +51,10 @@ class DialogueBox:
         self.npc_id = npc_id
         self.memory = memory
         self.name = character_name(npc_id)
+        try:
+            self._is_vendor = load_character(npc_id).get("kind") == "vendor"
+        except KeyError:
+            self._is_vendor = False
 
         self.input_text = ""
         self.npc_line = ""
@@ -136,9 +141,10 @@ class DialogueBox:
         if event.key == pygame.K_ESCAPE:
             self.finished = True
             return
-        # Open the trade view with Ctrl/Cmd (so every letter key stays free for typing).
+        # Open trade/shop with Ctrl/Cmd (so every letter key stays free for typing).
         if event.key in TRADE_KEYS and self.mode in ("reveal", "await"):
-            self.trade = TradePanel(self.world, self.npc_id, self.name)
+            self.trade = (ShopPanel(self.world, self.npc_id, self.name) if self._is_vendor
+                          else TradePanel(self.world, self.npc_id, self.name))
             return
         if self.mode == "reveal":
             # fast-forward the typewriter
@@ -231,10 +237,11 @@ class DialogueBox:
                 draw_text(screen, ln + (caret if i == len(lines) - 1 else ""),
                           (body_x, ly), inp_font, T.TEXT)
                 ly += 22
-            draw_text(screen, "[Ctrl] trade", (box.right - 16, iy + 2),
-                      T.font(13), T.TEXT_DIM, right=True)
+            draw_text(screen, "[Ctrl] shop" if self._is_vendor else "[Ctrl] trade",
+                      (box.right - 16, iy + 2), T.font(13), T.TEXT_DIM, right=True)
         elif self.mode == "reveal":
-            draw_text(screen, "[Enter] skip · [Ctrl] trade", (body_x, iy),
+            tlabel = "[Ctrl] shop" if self._is_vendor else "[Ctrl] trade"
+            draw_text(screen, f"[Enter] skip · {tlabel}", (body_x, iy),
                       T.font(14), T.TEXT_DIM)
         else:
             draw_text(screen, "…", (body_x, iy), T.font(14), T.TEXT_DIM)
