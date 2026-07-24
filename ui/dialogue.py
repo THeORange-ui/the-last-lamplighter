@@ -22,6 +22,9 @@ from ui.render import draw_text, wrap_text
 
 REVEAL_CPS = 55          # characters per second for the typewriter
 CLOSE_DELAY = 0.6        # seconds to linger after an end_dialogue line
+_BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
+_BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
+_INPUT_LINES = 2         # how many wrapped lines of the input to show (tail)
 
 # Ctrl / Cmd toggles the trade view (I would collide with typing a message).
 TRADE_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
@@ -58,6 +61,7 @@ class DialogueBox:
         self._close_timer = 0.0
         self._end_after_reveal = False
         self._caret = 0.0
+        self._bs_timer = _BS_DELAY               # backspace hold-to-repeat countdown
         self.trade: TradePanel | None = None
         self.combat_request: str | None = None   # npc_id if the NPC turned hostile
 
@@ -111,6 +115,16 @@ class DialogueBox:
             if self._close_timer <= 0:
                 self.finished = True
 
+        # Hold Backspace to keep deleting (the first delete happens on key-down).
+        if self.mode == "await" and self.input_text and \
+                pygame.key.get_pressed()[pygame.K_BACKSPACE]:
+            self._bs_timer -= dt
+            if self._bs_timer <= 0:
+                self.input_text = self.input_text[:-1]
+                self._bs_timer = _BS_INTERVAL
+        else:
+            self._bs_timer = _BS_DELAY
+
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
             return
@@ -139,6 +153,7 @@ class DialogueBox:
                 self._start_turn(text)
         elif event.key == pygame.K_BACKSPACE:
             self.input_text = self.input_text[:-1]
+            self._bs_timer = _BS_DELAY        # pause before hold-repeat kicks in
         elif event.unicode and event.unicode.isprintable() and len(self.input_text) < 160:
             self.input_text += event.unicode
 
@@ -202,14 +217,20 @@ class DialogueBox:
                 draw_text(screen, line, (body_x, by), T.font(14, bold=True), T.EFFECT)
                 by += 18
 
-        # input row
+        # input row (wraps onto a second line as it overflows; shows the tail)
         iy = box.bottom - 34
         pygame.draw.line(screen, T.WALL, (box.left + 14, iy - 6),
                          (box.right - 14, iy - 6), 1)
         if self.mode == "await":
-            caret = "|" if self._caret < 0.5 else " "
-            draw_text(screen, "> " + self.input_text + caret,
-                      (body_x, iy), T.font(18, mono=True), T.TEXT)
+            inp_font = T.font(18, mono=True)
+            caret = "|" if self._caret < 0.5 else ""
+            lines = wrap_text("> " + self.input_text, inp_font, max_w - 96) or ["> "]
+            lines = lines[-_INPUT_LINES:]
+            ly = iy - 22 * (len(lines) - 1)
+            for i, ln in enumerate(lines):
+                draw_text(screen, ln + (caret if i == len(lines) - 1 else ""),
+                          (body_x, ly), inp_font, T.TEXT)
+                ly += 22
             draw_text(screen, "[Ctrl] trade", (box.right - 16, iy + 2),
                       T.font(13), T.TEXT_DIM, right=True)
         elif self.mode == "reveal":

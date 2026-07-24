@@ -16,6 +16,9 @@ from ui import sprites
 from ui import theme as T
 from ui.render import draw_text, wrap_text
 
+_BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
+_BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
+
 
 class CombatScene:
     def __init__(self, world, combat: Combat):
@@ -30,6 +33,7 @@ class CombatScene:
         self.outcome = ""
         self._busy = False           # a turn is resolving on the worker thread
         self._caret = 0.0
+        self._bs_timer = _BS_DELAY   # backspace hold-to-repeat countdown
 
     # --- menu contents ----------------------------------------------------
     def _menu(self):
@@ -179,6 +183,7 @@ class CombatScene:
                     self._resolve(lambda: mercy_attempt(self.combat, tgt, said))
         elif event.key == pygame.K_BACKSPACE:
             self.act_text = self.act_text[:-1]
+            self._bs_timer = _BS_DELAY        # pause before hold-repeat kicks in
         elif event.unicode and event.unicode.isprintable() and len(self.act_text) < 140:
             self.act_text += event.unicode
 
@@ -207,6 +212,15 @@ class CombatScene:
     # --- update -----------------------------------------------------------
     def update(self, dt):
         self._caret = (self._caret + dt) % 1.0
+        # Hold Backspace to keep deleting in the ACT speech box.
+        if self.phase == "act_input" and self.act_text and \
+                pygame.key.get_pressed()[pygame.K_BACKSPACE]:
+            self._bs_timer -= dt
+            if self._bs_timer <= 0:
+                self.act_text = self.act_text[:-1]
+                self._bs_timer = _BS_INTERVAL
+        else:
+            self._bs_timer = _BS_DELAY
         if self.phase == "resolving" and not self._busy:
             if self.combat.over:
                 self.phase = "ended"
@@ -274,14 +288,20 @@ class CombatScene:
 
     def _draw_act_input(self, screen):
         tgt = self._act_target
-        y = T.SCREEN_H - 92
+        y = T.SCREEN_H - 96
         draw_text(screen, f"Speak to {tgt.name if tgt else 'it'}:",
-                  (30, y), T.font(17, bold=True), T.TEXT)
-        caret = "|" if self._caret < 0.5 else " "
-        draw_text(screen, "> " + self.act_text + caret, (30, y + 28),
-                  T.font(18, mono=True), T.HEARTH)
-        draw_text(screen, "Enter to speak · Esc back", (T.SCREEN_W - 20, T.SCREEN_H - 28),
-                  T.font(14), T.TEXT_DIM, right=True)
+                  (30, y), T.font(16, bold=True), T.TEXT)
+        inp_font = T.font(18, mono=True)
+        caret = "|" if self._caret < 0.5 else ""
+        lines = wrap_text("> " + self.act_text, inp_font, T.SCREEN_W - 280) or ["> "]
+        lines = lines[-2:]
+        ly = y + 22
+        for i, ln in enumerate(lines):
+            draw_text(screen, ln + (caret if i == len(lines) - 1 else ""),
+                      (30, ly), inp_font, T.HEARTH)
+            ly += 22
+        draw_text(screen, "Enter · Esc back", (T.SCREEN_W - 20, T.SCREEN_H - 24),
+                  T.font(13), T.TEXT_DIM, right=True)
 
     def _draw_menu(self, screen):
         if self.phase == "act_input":

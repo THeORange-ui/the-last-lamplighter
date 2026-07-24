@@ -22,12 +22,26 @@ KEEP_RECENT = 8           # entries kept verbatim after a compaction
 
 
 class NPCMemory:
+    # Live instances by npc_id, so a memory written from elsewhere (e.g. one NPC
+    # telling another something) lands on the same object the game is already
+    # holding, not a stale copy that would later overwrite it on disk.
+    _LIVE: dict[str, "NPCMemory"] = {}
+
     def __init__(self, npc_id: str):
         self.npc_id = npc_id
         self.path = MEMORY_DIR / f"{npc_id}.json"
         self.summary: str = ""
         self.entries: list[str] = []
         self._load()
+        NPCMemory._LIVE[npc_id] = self
+
+    @classmethod
+    def remember_for(cls, npc_id: str, note: str) -> "NPCMemory":
+        """Append a note to another NPC's memory (used by the `tell` action).
+        Reuses the live instance if there is one, else loads/creates it."""
+        inst = cls._LIVE.get(npc_id) or cls(npc_id)
+        inst.remember(note)
+        return inst
 
     def _load(self) -> None:
         if not self.path.exists():
@@ -90,7 +104,9 @@ class NPCMemory:
 
     @staticmethod
     def wipe_all() -> None:
-        """Delete all runtime memory (used by a fresh-game reset)."""
+        """Delete all runtime memory (used by a fresh-game reset). Also drops the
+        live-instance registry so stale objects can't write over restored memory."""
+        NPCMemory._LIVE.clear()
         if MEMORY_DIR.exists():
             for f in MEMORY_DIR.glob("*.json"):
                 f.unlink()

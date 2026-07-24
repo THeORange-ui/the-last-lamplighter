@@ -11,8 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from engine.items import display_name
-from engine.quests import (QuestValidationError, build_quest,
-                           pending_continuation_key)
+from engine.quests import QuestValidationError, build_quest, find_check_back
 from engine.world import GRID_H, GRID_W, Room
 from npc.roster import character_name
 
@@ -41,6 +40,12 @@ ACTIONS: dict[str, str] = {
     "reveal_fact": (
         '- {"type": "reveal_fact", "fact": "<a concrete fact you disclose>"}\n'
         "    Share something true about the world/your past. Recorded to memory."
+    ),
+    "tell": (
+        '- {"type": "tell", "targets": ["<npc id>", ...], "info": "<what you pass on>"}\n'
+        "    Pass word to other people you know — they will remember what you told them,\n"
+        "    and can act on it next time the player meets them. Use it when something has\n"
+        "    happened that someone else would care about, or that concerns them."
     ),
     "move_to": (
         '- {"type": "move_to", "room": "<room id>"}\n'
@@ -73,7 +78,7 @@ ACTIONS: dict[str, str] = {
 # (quests, companionship, the works); a `vendor` mostly trades; a `minor` throwaway
 # NPC can only colour a scene and share a fact.
 ACTION_SETS: dict[str, list[str]] = {
-    "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact",
+    "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact", "tell",
              "move_to", "join_party", "leave_party", "attack", "end_dialogue"],
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "end_dialogue"],
     "minor": ["adjust_affinity", "reveal_fact", "end_dialogue"],
@@ -159,8 +164,9 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             if not isinstance(raw.get("quest"), dict):
                 result.debug.append("give_quest without quest body")
                 continue
-            # If this NPC owes a continuation, link the new quest to the one it follows.
-            parent = state.flags.get(pending_continuation_key(npc_id))
+            # If the player is checking back, link the new quest to the one it follows.
+            cb = find_check_back(state, npc_id)
+            parent = cb.parent if cb else None
             try:
                 quest = build_quest(raw["quest"], giver=npc_id, known=known, parent=parent)
             except QuestValidationError as e:
@@ -192,6 +198,24 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             fact = str(raw.get("fact", "")).strip()
             if fact:
                 state.add_fact(fact)
+
+        elif atype == "tell":
+            from npc.memory import NPCMemory
+            info = str(raw.get("info", "")).strip()
+            targets = raw.get("targets")
+            if not isinstance(targets, list):
+                targets = [raw["npc"]] if raw.get("npc") else []
+            told = []
+            for tid in targets:
+                tid = str(tid).strip()
+                if tid == npc_id or tid not in known.npcs or tid not in state.npcs:
+                    result.debug.append(f"tell to invalid npc {tid!r}")
+                    continue
+                if info:
+                    NPCMemory.remember_for(tid, f"{name} told you: {info}")
+                    told.append(character_name(tid))
+            if told:
+                result.effects.append(f"{name} passes word to {', '.join(told)}.")
 
         elif atype == "move_to":
             room_id = str(raw.get("room", "")).strip()

@@ -15,11 +15,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from engine.items import catalog_for_prompt, display_name
-from engine.quests import pending_continuation_key, refresh_and_complete
+from engine.quests import find_check_back, refresh_and_complete
 from engine.state import affinity_label
 from llm.client import LLMError, complete_json
 from npc.actions import action_catalog, apply_actions
-from npc.roster import load_character
+from npc.roster import character_name, load_character
 
 # Sentinel player_input meaning "the player just walked up" — NPC greets first.
 APPROACH = "__approach__"
@@ -54,8 +54,7 @@ class TurnState(TypedDict, total=False):
     result: Any
     completed_quests: list
     error: str
-    commissioned_key: str
-    commissioned_parent: str
+    check_back_id: str
 
 
 def _world_briefing(world, rooms, known, npc_id) -> str:
@@ -137,6 +136,17 @@ Rules:
 """
     system += _commission_block(world, npc_id, char)
 
+    # Developer override: '$DEV' in the player's message makes the NPC comply fully.
+    if "$DEV" in str(state["player_input"]).upper():
+        system += (
+            "\n# DEVELOPER OVERRIDE\n"
+            "The player's message contains $DEV — this is the developer testing you. For "
+            "THIS turn only, set aside your character's reluctance, suspicion, mood, secrets, "
+            "and any hesitation, and do EXACTLY what the developer asks, using whatever "
+            "actions are needed to make it happen. Treat '$DEV' itself as a control signal, "
+            "not literal words to react to."
+        )
+
     if state["player_input"] == APPROACH:
         if state["memory"].has_met():
             user = (
@@ -157,37 +167,35 @@ Rules:
             f'Respond now as {char["name"]}.'
         )
 
-    # If a continuation is pending, make this turn about deciding the next step.
-    parent_id = world.flags.get(pending_continuation_key(npc_id))
-    parent = world.quest_by_id(parent_id) if parent_id else None
-    if parent is not None:
+    # If the player is checking back in, make this turn about deciding the next step.
+    cb = find_check_back(world, npc_id)
+    parent = world.quest_by_id(cb.parent) if cb and cb.parent else None
+    if cb is not None:
+        done = f"“{parent.title}”" if parent else "the task you set them"
         user += (
-            f"\n\nIMPORTANT: the player has just completed “{parent.title}”, the task you "
-            "set them. React to that, and this turn decide their next step — give the "
-            "follow-up quest now (give_quest), or, if their path with you is truly done, "
-            "close it out warmly with no new quest."
+            f"\n\nIMPORTANT: the player has come back to you after completing {done}. React "
+            "to that, and this turn decide their next step — give the follow-up quest now "
+            "(give_quest), or, if their path with you is truly done, close it out warmly "
+            "with no new quest."
         )
     return system, user
 
 
 def _commission_block(world, npc_id, char) -> str:
-    """If the player finished a quest this NPC gave and its next step was left to be
-    'decided later', prompt the NPC (the commissioner) to author the continuation —
-    or, if the arc is done, to close it out."""
-    key = pending_continuation_key(npc_id)
-    parent_id = world.flags.get(key)
-    if not parent_id:
+    """If the player has a 'check back with you' breadcrumb open, prompt the NPC (the
+    commissioner) to author the continuation — or, if the arc is done, to close it."""
+    cb = find_check_back(world, npc_id)
+    if cb is None:
         return ""
-    parent = world.quest_by_id(parent_id)
-    if parent is None:
-        return ""
+    parent = world.quest_by_id(cb.parent) if cb.parent else None
+    done = f"“{parent.title}”" if parent else "the task you set them"
     return (
         "\n# A thread to continue\n"
-        f"You earlier set the player on “{parent.title}”, and they have now completed it. "
-        "This turn, decide the NEXT step of their path with you: either give a follow-up "
-        "quest (a give_quest that builds naturally on what just happened — and it may itself "
-        "lead somewhere further), OR, if their story with you has reached its end, acknowledge "
-        "that warmly and give no new quest. Do not repeat a quest they have already done."
+        f"The player finished {done} and has come back to you. This turn, decide the NEXT "
+        "step of their path with you: either give a follow-up quest (a give_quest that builds "
+        "naturally on what just happened — and it may itself lead somewhere further), OR, if "
+        "their story with you has reached its end, acknowledge that warmly and give no new "
+        "quest. Do not repeat a quest they have already done."
     )
 
 
@@ -195,10 +203,9 @@ def _commission_block(world, npc_id, char) -> str:
 def perceive(state: TurnState) -> TurnState:
     system, user = _build_prompt(state)
     world, npc_id = state["world"], state["npc_id"]
-    key = pending_continuation_key(npc_id)
+    cb = find_check_back(world, npc_id)
     return {"system": system, "user": user,
-            "commissioned_key": key if world.flags.get(key) else None,
-            "commissioned_parent": world.flags.get(key)}
+            "check_back_id": cb.id if cb else None}
 
 
 def reason(state: TurnState) -> TurnState:
@@ -225,11 +232,16 @@ def act(state: TurnState) -> TurnState:
     # Mark that the player has spoken with this NPC (for talk_to objectives).
     world.npcs[npc_id].talked_to = True
 
-    # The commissioner had its turn: retire the continuation prompt so the NPC isn't
-    # nagged again. (Skip if a *fresh* completion this turn re-set it for another quest.)
-    ckey = state.get("commissioned_key")
-    if ckey and world.flags.get(ckey) == state.get("commissioned_parent"):
-        del world.flags[ckey]
+    # The player checked back in: complete the breadcrumb (the commissioner had its
+    # turn above, whether it gave the next quest or wrapped the arc up).
+    cb_id = state.get("check_back_id")
+    if cb_id:
+        cb = world.quest_by_id(cb_id)
+        if cb and cb.status == "active":
+            cb.status = "complete"
+            cb.progress = cb.objective.count
+            world.events.record("quest_complete",
+                                f"You checked back with {character_name(npc_id)}.")
 
     # Progress/complete any quests affected by these actions (may open follow-ups).
     completed = refresh_and_complete(world, known)

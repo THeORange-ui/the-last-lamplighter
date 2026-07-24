@@ -58,6 +58,9 @@ Three layers enforce this, and changes usually touch all three:
    that kind**, appending to `ActionResult.effects` (player-visible) or `.debug` (dropped).
    To add an NPC capability you add a doc-block in `ACTIONS`, list it in the relevant
    `ACTION_SETS`, and add a validated branch. (`join_combat` is a legacy alias of `join_party`.)
+   The `main` set includes `tell` — one NPC passes word to others, writing a line into each
+   target's memory via `NPCMemory.remember_for` (a live-instance registry keeps that write on
+   the same object the game holds), so NPCs stay informed without the player re-explaining.
 2. **`engine/quests.py`** — quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
    target must resolve via `KnownEntities`). `build_quest()` raises `QuestValidationError` for
    ungrounded targets; `refresh_and_complete(state, known)` recomputes progress from world
@@ -65,12 +68,14 @@ Three layers enforce this, and changes usually touch all three:
    (rooms/npcs/items/interactable_kinds) is the whitelist everything grounds against.
    **Quest trees:** a `Quest` has a `parent` and a list of `followups` — each a concrete
    `{"kind":"quest", ...}` (built and activated immediately on completion) or
-   `{"kind":"decide_later"}` (a leaf; the default). A `decide_later` node on completion sets
-   `flags["pending_continuation::<giver>"]`; the **commissioner** is simply the giver's own
-   dialogue agent (`npc/agent.py` `_commission_block` + the per-turn nudge), which authors the
-   next quest when the player next talks (or concludes the arc). The flag clears after that
-   turn. Note `refresh_and_complete` needs `known` to build concrete children — pass it
-   (call sites in `main.py`/`agent.act` do).
+   `{"kind":"decide_later"}` (a leaf; the default). A `decide_later` node on completion drops
+   a **visible "Check back with &lt;giver&gt;" breadcrumb quest** (`make_check_back_quest`,
+   objective type `CHECK_BACK` — engine-created, never LLM-proposed, never auto-completed by
+   progress). When the player talks to that giver, the **commissioner** (the giver's own
+   dialogue agent — `_commission_block` + the per-turn nudge, both keyed off
+   `find_check_back`) authors the next quest (or concludes the arc), and `agent.act` marks the
+   breadcrumb complete. `refresh_and_complete` needs `known` to build concrete children — pass
+   it (call sites in `main.py`/`agent.act` do).
 3. **`engine/items.py`** — the item catalog is a **closed set**. NPCs can only `offer_item`
    things actually in their own `inventory`; the LLM cannot invent items.
 
@@ -156,6 +161,9 @@ the JSON object), raising `LLMError` on failure.
 - **Font tofu:** the bundled font lacks many glyphs. Use `•` and plain ASCII; do NOT use
   `◆ ✔ ↑ ↓ ▸` etc. — they render as boxes.
 - Defeat is never a hard game-over — the player is knocked out and wakes safe.
+- **`$DEV` dev backdoor:** if the player's dialogue message contains `$DEV`, the NPC gets a
+  system directive to drop all reluctance and do exactly what's asked (still through validated
+  actions — it can't invent items). Used for playtesting; see `_build_prompt` in `npc/agent.py`.
 - Prerequisites that must be reliable are enforced in the **engine**, not left to the LLM
   (e.g. lighting a lamp consumes an `oil_flask`; Wren deterministically grants flasks). Keep
   *flavor* with the LLM, *mechanics* in the engine.

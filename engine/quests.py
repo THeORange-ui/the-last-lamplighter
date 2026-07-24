@@ -22,6 +22,12 @@ from dataclasses import dataclass, field
 OBJECTIVE_TYPES = {"reach", "interact", "fetch", "deliver", "talk_to"}
 REWARD_TYPES = {"item", "affinity", "info"}
 
+# Objective type for the breadcrumb that sends the player back to a quest-giver so
+# they can decide (and hand over) the next step. Not part of OBJECTIVE_TYPES: it is
+# created by the engine, never proposed by the LLM, and completed when the player
+# checks back in (handled in npc/agent.py), not by progress evaluation.
+CHECK_BACK = "check_back"
+
 
 @dataclass
 class Objective:
@@ -197,18 +203,40 @@ def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
     return just_done
 
 
-def pending_continuation_key(giver: str) -> str:
-    return f"pending_continuation::{giver}"
+def make_check_back_quest(giver: str, parent_id: str) -> Quest:
+    """A visible breadcrumb: 'Check back with <giver>'. Completing the parent opens
+    it; talking to the giver completes it and prompts them for the next step."""
+    from npc.roster import character_name  # local import: avoid engine→npc coupling
+    name = character_name(giver)
+    return Quest(
+        id=f"check_back__{parent_id}",
+        title=f"Check back with {name}",
+        description=f"Return to {name} to see what comes next.",
+        giver=giver,
+        objective=Objective(type=CHECK_BACK, target=giver, count=1),
+        reward=Reward(type="affinity", value="0"),
+        parent=parent_id,
+        followups=[],
+    )
+
+
+def find_check_back(state, giver: str):
+    """The active 'check back with <giver>' breadcrumb, if any."""
+    return next((q for q in state.active_quests()
+                 if q.objective.type == CHECK_BACK and q.giver == giver), None)
 
 
 def _activate_followups(quest: Quest, state, known) -> None:
     """When a quest completes, open its follow-ups: activate concrete child quests
-    now, and flag 'decide_later' nodes so the giver invents the next step when the
-    player next speaks with them (the commissioner)."""
+    now, and for 'decide_later' nodes drop a visible 'check back with <giver>'
+    breadcrumb that guides the player back so the giver can decide the next step."""
     for fu in quest.followups or []:
         kind = fu.get("kind")
         if kind == "decide_later":
-            state.flags[pending_continuation_key(quest.giver)] = quest.id
+            cb = make_check_back_quest(quest.giver, quest.id)
+            if not state.has_quest(cb.id):
+                state.quests.append(cb)
+                state.events.record("quest_start", f"New note: {cb.title}.")
         elif kind == "quest" and known is not None:
             try:
                 child = build_quest(fu["quest"], giver=quest.giver, known=known,
