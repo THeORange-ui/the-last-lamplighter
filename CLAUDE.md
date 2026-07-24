@@ -85,15 +85,22 @@ the api_key in logs or commits.
   actions: Attack / Defend / Act / Item / Spare / Flee. HP is the player's `PlayerState.hp`;
   combat writes it back on exit. Defeat = **knocked out**, wake in the square at half HP
   minus a few coins (never a hard game-over).
-- **ACT / mercy is LLM-driven** (`npc/combat_agent.py`): each enemy has `resolve`; ACT
-  approaches route to the enemy's AI, which reacts in character and lowers resolve — answer
-  what it truly wants and it becomes **spareable**, letting you end the fight peacefully.
-  Enemy turns are also AI-chosen (attack/heavy/loom) with mechanical fallbacks on LLM error.
-  Enemy turns run on a worker thread with a spinner, like dialogue.
-- **The Gloam** (`npc/characters/gloam.json`) is the boss: high HP, meant to be *reached*,
-  not ground down. The ridge path unseals once you've **read Ansel's ridge map** (sets
-  `flags['map_read']`) and **lit all the lamps**; stepping onto the ridge starts the fight.
-  Winning or sparing sets `flags['gloam_resolved']` and restores the Hearthlight.
+- **ACT is a free-text speech box** (not a menu): you type what you *say* to the enemy, and
+  it routes to the enemy's AI (`npc/combat_agent.py`), which reacts in character and adjusts
+  its `resolve` — answer what it truly wants and it becomes **spareable**, ending the fight
+  peacefully. The enemy also **talks back reacting to your move** each round (attack/heavy/
+  loom chosen by the AI), with mechanical fallbacks on LLM error. Enemy turns run on a
+  worker thread with a spinner, like dialogue.
+- **The ridge is a real place** (`biome="snow"` rooms): `path` → `ridge_foot` → `ridge_pass`
+  → `ridge_summit`. It unseals once you've **read Ansel's map** (`flags['map_read']`) and
+  **lit all the lamps** (`main._ridge_open`). Non-AI `gloamling` creatures ambush in the
+  foot/pass rooms (per-room `*_cleared` flags); a supply item waits to be found. Fleeing a
+  ridge fight drops you back to the trailhead.
+- **The Gloam** (`npc/characters/gloam.json`) waits at the summit: high HP, meant to be
+  *reached* with words, not ground down. Winning or sparing sets `flags['gloam_resolved']`
+  and restores the Hearthlight.
+- **Trade in dialogue is opened with Ctrl/Cmd** (`ui/dialogue.py: TRADE_KEYS`), not I — I
+  collided with typing a message.
 - **Hostile NPCs:** an NPC's AI can emit `attack` mid-dialogue to turn hostile and start a
   fight (persona-driven, so they can be talked down/spared too — and they *remember* being
   spared or bested). `join_combat` makes an NPC a pledged ally who fights beside you

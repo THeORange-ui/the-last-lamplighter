@@ -34,6 +34,11 @@ def _clamp(i, n):
     return 0 if n == 0 else max(0, min(i, n - 1))
 
 
+# Esc or Ctrl/Cmd close the in-dialogue trade view.
+_TRADE_CLOSE_KEYS = (pygame.K_ESCAPE, pygame.K_LCTRL, pygame.K_RCTRL,
+                     pygame.K_LMETA, pygame.K_RMETA)
+
+
 class InventoryPanel:
     def __init__(self, world):
         self.world = world
@@ -155,7 +160,7 @@ class TradePanel:
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
             return None
-        if event.key in (pygame.K_i, pygame.K_ESCAPE):
+        if event.key in _TRADE_CLOSE_KEYS:
             if self.mode == "actions":
                 self.mode = "items"
                 return None
@@ -222,7 +227,7 @@ class TradePanel:
         if self.message:
             draw_text(screen, self.message, (m, T.SCREEN_H - 58),
                       T.font(15, bold=True), T.EFFECT)
-        draw_text(screen, "Left/Right side · Up/Down item · Enter act · I/Esc close",
+        draw_text(screen, "Left/Right side · Up/Down item · Enter act · Ctrl/Esc close",
                   (T.SCREEN_W // 2, T.SCREEN_H - 28), T.font(14), T.TEXT_DIM, center=True)
 
 

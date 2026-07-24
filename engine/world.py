@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 from .items import ITEM_IDS
 from .quests import KnownEntities, Objective, Quest, Reward
-from .state import NPCRuntime, PlayerState, WorldState
+from .state import GroundItem, NPCRuntime, PlayerState, WorldState
 
 TILE = 32
 GRID_W = 19
@@ -41,6 +41,7 @@ class Room:
     lamps: dict[str, tuple[int, int]] = field(default_factory=dict)
     obstacles: set[tuple[int, int]] = field(default_factory=set)
     hearthlight: tuple[int, int] | None = None
+    biome: str = "town"          # "town" | "snow" — drives the room's palette
 
     def blocked(self) -> set[tuple[int, int]]:
         """Static blocked tiles: border walls (minus doors) + obstacles."""
@@ -106,17 +107,39 @@ def build_rooms() -> dict[str, Room]:
         lamps={"lamp_path": (9, 4)},
         doors=[
             Door(x=9, y=0, to_room="square", spawn=(9, GRID_H - 2)),
-            Door(
-                x=9,
-                y=GRID_H - 1,
-                to_room="ridge",
-                spawn=(9, 1),
-                locked=True,
-                locked_msg="The way up the ridge is swallowed in cold dark. Not yet.",
-            ),
+            # Gating (read the map + lamps lit) is enforced in main.try_move.
+            Door(x=9, y=GRID_H - 1, to_room="ridge_foot", spawn=(9, 1)),
         ],
     )
-    return {r.id: r for r in (square, tavern, market, home, path)}
+    # --- the ridge: a small snow-swept climb, the Gloam waiting at the top ---
+    ridge_foot = Room(
+        id="ridge_foot",
+        name="The Ridge — Foot",
+        biome="snow",
+        obstacles={(4, 4), (14, 8)},              # snow-buried rocks
+        doors=[
+            Door(x=9, y=0, to_room="path", spawn=(9, GRID_H - 2)),
+            Door(x=9, y=GRID_H - 1, to_room="ridge_pass", spawn=(9, 1)),
+        ],
+    )
+    ridge_pass = Room(
+        id="ridge_pass",
+        name="The Ridge — Windward Pass",
+        biome="snow",
+        obstacles={(5, 5), (6, 5), (13, 7), (14, 7), (9, 9)},  # a narrow, rocky pass
+        doors=[
+            Door(x=9, y=0, to_room="ridge_foot", spawn=(9, GRID_H - 2)),
+            Door(x=9, y=GRID_H - 1, to_room="ridge_summit", spawn=(9, 1)),
+        ],
+    )
+    ridge_summit = Room(
+        id="ridge_summit",
+        name="The Ridge — Summit",
+        biome="snow",
+        doors=[Door(x=9, y=0, to_room="ridge_pass", spawn=(9, GRID_H - 2))],
+    )
+    rooms = (square, tavern, market, home, path, ridge_foot, ridge_pass, ridge_summit)
+    return {r.id: r for r in rooms}
 
 
 # --- Character seed placement ------------------------------------------------
@@ -131,7 +154,7 @@ NPC_SPAWNS = {
 
 def known_entities(rooms: dict[str, Room], npc_ids) -> KnownEntities:
     return KnownEntities(
-        rooms=set(rooms.keys()) | {"ridge"},
+        rooms=set(rooms.keys()),
         npcs=set(npc_ids),
         items=set(ITEM_IDS),
         interactable_kinds=set(INTERACTABLE_KINDS),
@@ -189,5 +212,6 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
         player=PlayerState(room="square", x=9, y=8, inventory=["coin"] * 5),
         npcs=npcs,
         lamps=lamps,
+        ground_items=[GroundItem("ridge_pass", 3, 3, "tonic")],  # a supply to find
     )
     return state, rooms, known_entities(rooms, npc_ids)

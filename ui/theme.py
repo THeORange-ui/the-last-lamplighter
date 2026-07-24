@@ -20,6 +20,12 @@ FLOOR = (30, 28, 44)
 FLOOR_ALT = (34, 32, 50)
 WALL = (54, 50, 74)
 GRID_LINE = (24, 22, 36)
+
+# per-biome palettes (floor, floor_alt, wall) — snow is cold blue, still dusk-dark
+BIOMES = {
+    "town": {"floor": (30, 28, 44), "floor_alt": (34, 32, 50), "wall": (54, 50, 74)},
+    "snow": {"floor": (40, 50, 74), "floor_alt": (46, 58, 84), "wall": (92, 112, 150)},
+}
 DOOR = (96, 84, 132)
 DOOR_LOCKED = (70, 40, 40)
 

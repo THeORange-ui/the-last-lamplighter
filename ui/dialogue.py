@@ -23,6 +23,9 @@ from ui.render import draw_text, wrap_text
 REVEAL_CPS = 55          # characters per second for the typewriter
 CLOSE_DELAY = 0.6        # seconds to linger after an end_dialogue line
 
+# Ctrl / Cmd toggles the trade view (I would collide with typing a message).
+TRADE_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
+
 
 class _Turn:
     """Holds the result of a background NPC turn."""
@@ -119,11 +122,10 @@ class DialogueBox:
         if event.key == pygame.K_ESCAPE:
             self.finished = True
             return
-        # Open the trade view with I (when not mid-word, so 'i' can still be typed).
-        if event.key == pygame.K_i and (self.mode == "reveal" or not self.input_text):
-            if self.mode in ("reveal", "await"):
-                self.trade = TradePanel(self.world, self.npc_id, self.name)
-                return
+        # Open the trade view with Ctrl/Cmd (so every letter key stays free for typing).
+        if event.key in TRADE_KEYS and self.mode in ("reveal", "await"):
+            self.trade = TradePanel(self.world, self.npc_id, self.name)
+            return
         if self.mode == "reveal":
             # fast-forward the typewriter
             self.reveal = len(self.npc_line)
@@ -208,10 +210,10 @@ class DialogueBox:
             caret = "|" if self._caret < 0.5 else " "
             draw_text(screen, "> " + self.input_text + caret,
                       (body_x, iy), T.font(18, mono=True), T.TEXT)
-            draw_text(screen, "[I] items", (box.right - 16, iy + 2),
+            draw_text(screen, "[Ctrl] trade", (box.right - 16, iy + 2),
                       T.font(13), T.TEXT_DIM, right=True)
         elif self.mode == "reveal":
-            draw_text(screen, "[Enter] to skip · [I] items", (body_x, iy),
+            draw_text(screen, "[Enter] skip · [Ctrl] trade", (body_x, iy),
                       T.font(14), T.TEXT_DIM)
         else:
             draw_text(screen, "…", (body_x, iy), T.font(14), T.TEXT_DIM)

@@ -12,7 +12,7 @@ import pygame
 from engine.combat import (Combat, player_attack, player_defend, player_spare)
 from engine.combat import ally_step
 from engine.items import ITEMS, display_name
-from npc.combat_agent import act_options, enemy_turn, mercy_attempt
+from npc.combat_agent import enemy_turn, mercy_attempt
 from ui import sprites
 from ui import theme as T
 from ui.render import draw_text, wrap_text
@@ -22,9 +22,11 @@ class CombatScene:
     def __init__(self, world, combat: Combat):
         self.world = world
         self.combat = combat
-        self.phase = "menu"          # menu | act | item | target | resolving | ended
+        self.phase = "menu"          # menu | act_input | item | target | resolving | ended
         self.sel = 0
         self.sub_sel = 0
+        self.act_text = ""           # free-text speech for ACT
+        self._act_enemy = None
         self.finished = False
         self.outcome = ""
         self._busy = False           # a turn is resolving on the worker thread
@@ -95,8 +97,8 @@ class CombatScene:
             self._menu_key(event)
         elif self.phase == "target":
             self._list_key(event, self.combat.enemies(), self._on_target)
-        elif self.phase == "act":
-            self._list_key(event, act_options(self._act_enemy), self._on_act)
+        elif self.phase == "act_input":
+            self._act_input_key(event)
         elif self.phase == "item":
             self._list_key(event, self._heal_items(), self._on_item)
 
@@ -132,7 +134,8 @@ class CombatScene:
             self._resolve(lambda: player_defend(self.combat))
         elif option == "Act":
             self._act_enemy = enemies[0]
-            self.sub_sel = 0; self.phase = "act"
+            self.act_text = ""
+            self.phase = "act_input"
         elif option == "Item":
             self.sub_sel = 0; self.phase = "item"
         elif option == "Spare":
@@ -145,9 +148,19 @@ class CombatScene:
     def _on_target(self, enemy):
         self._resolve(lambda: player_attack(self.combat, enemy))
 
-    def _on_act(self, approach):
-        enemy = self._act_enemy
-        self._resolve(lambda: mercy_attempt(self.combat, enemy, approach))
+    def _act_input_key(self, event):
+        if event.key == pygame.K_ESCAPE:
+            self.phase = "menu"
+        elif event.key == pygame.K_RETURN:
+            said = self.act_text.strip()
+            if said:
+                enemy = self._act_enemy
+                self.combat.add_log(f"You: “{said}”")
+                self._resolve(lambda: mercy_attempt(self.combat, enemy, said))
+        elif event.key == pygame.K_BACKSPACE:
+            self.act_text = self.act_text[:-1]
+        elif event.unicode and event.unicode.isprintable() and len(self.act_text) < 140:
+            self.act_text += event.unicode
 
     def _on_item(self, entry):
         item = entry[0]
@@ -231,15 +244,26 @@ class CombatScene:
                 draw_text(screen, ln, (box.left + 10, y), T.font(15), T.TEXT)
                 y += 20
 
+    def _draw_act_input(self, screen):
+        enemy = self._act_enemy
+        y = T.SCREEN_H - 92
+        draw_text(screen, f"Speak to {enemy.name if enemy else 'it'}:",
+                  (30, y), T.font(17, bold=True), T.TEXT)
+        caret = "|" if self._caret < 0.5 else " "
+        draw_text(screen, "> " + self.act_text + caret, (30, y + 28),
+                  T.font(18, mono=True), T.HEARTH)
+        draw_text(screen, "Enter to speak · Esc back", (T.SCREEN_W - 20, T.SCREEN_H - 28),
+                  T.font(14), T.TEXT_DIM, right=True)
+
     def _draw_menu(self, screen):
+        if self.phase == "act_input":
+            self._draw_act_input(screen)
+            return
         if self.phase == "menu":
             items = self._menu()
             sel = self.sel
         elif self.phase == "target":
             items = [e.name for e in self.combat.enemies()]
-            sel = self.sub_sel
-        elif self.phase == "act":
-            items = act_options(self._act_enemy)
             sel = self.sub_sel
         else:  # item
             heals = self._heal_items()

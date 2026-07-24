@@ -40,10 +40,18 @@ def _persona_block(enemy: Combatant) -> str:
     )
 
 
+def _last_player_move(combat: Combat) -> str:
+    for line in reversed(combat.log):
+        if line.startswith("You"):
+            return line
+    return "(they have not moved yet)"
+
+
 def _state_block(combat: Combat, enemy: Combatant) -> str:
     p = combat.player()
     return (
-        f"Combat so far: {' '.join(combat.log[-4:]) if combat.log else '(it has just begun)'}\n"
+        f"Recent combat: {' '.join(combat.log[-4:]) if combat.log else '(it has just begun)'}\n"
+        f"The player just did: {_last_player_move(combat)}\n"
         f"Your health: {enemy.hp}/{enemy.max_hp}. Your resolve to keep fighting: "
         f"{enemy.resolve}/100 (at 0 you would rather stop than fight).\n"
         f"The player's health: {p.hp}/{p.max_hp}."
@@ -58,15 +66,15 @@ def enemy_turn(combat: Combat, enemy: Combatant) -> str:
     char = load_character(enemy.persona)
     system = (
         f"{_persona_block(enemy)}\n\n"
-        "You are in a turn-based fight with the player. Decide what you do THIS turn, in "
-        "character. Reply as JSON: "
-        '{\"say\": \"<one short line you speak, in character>\", '
+        "You are in a turn-based fight with the player. In your 'say', REACT in character to "
+        "what the player just did (their last move), then take your turn. Reply as JSON: "
+        '{\"say\": \"<one short line reacting to their move, in character>\", '
         '\"action\": \"attack\" | \"heavy\" | \"loom\"}. '
         "attack = reach for them (normal), heavy = a stronger blow, loom = do no harm this "
-        "turn, only speak or gather. Choose loom sometimes if you are uncertain or reaching "
-        "out rather than striking."
+        "turn, only speak or gather. Choose loom sometimes if you are uncertain, hurt, or "
+        "reaching out rather than striking. Always say something."
     )
-    user = _state_block(combat, enemy) + "\n\nWhat do you do?"
+    user = _state_block(combat, enemy) + "\n\nReact and act."
     try:
         out = complete_json(system, user, temperature=0.8, max_tokens=160)
     except LLMError:

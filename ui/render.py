@@ -44,19 +44,27 @@ def _tile_rect(x, y):
 def draw_overworld(screen, world, rooms):
     room = rooms[world.player.room]
     blocked = room.blocked()
+    pal = T.BIOMES.get(getattr(room, "biome", "town"), T.BIOMES["town"])
 
     # floor
     for y in range(T.GRID_H):
         for x in range(T.GRID_W):
             r = _tile_rect(x, y)
             checker = (x + y) % 2 == 0
-            pygame.draw.rect(screen, T.FLOOR if checker else T.FLOOR_ALT, r)
+            pygame.draw.rect(screen, pal["floor"] if checker else pal["floor_alt"], r)
+            if room.biome == "snow":
+                # a couple of deterministic snow flecks per tile
+                h = (x * 73 + y * 149) % 100
+                if h < 22:
+                    fx = r.x + 6 + (h * 7) % (T.TILE - 12)
+                    fy = r.y + 6 + (h * 13) % (T.TILE - 12)
+                    pygame.draw.rect(screen, (206, 216, 236), (fx, fy, 2, 2))
 
     # walls
     for (x, y) in blocked:
         if room.hearthlight == (x, y):
             continue  # drawn as the lantern, not a wall
-        pygame.draw.rect(screen, T.WALL, _tile_rect(x, y))
+        pygame.draw.rect(screen, pal["wall"], _tile_rect(x, y))
 
     # doors
     for d in room.doors:

@@ -185,8 +185,8 @@ class Game:
         tx, ty = p.x + dx, p.y + dy
         door = room.door_at(tx, ty)
         if door:
-            if door.to_room == "ridge":
-                self.try_ridge()
+            if door.to_room == "ridge_foot" and not self._ridge_open():
+                self.set_toast(self._ridge_locked_msg())
                 return
             if door.locked:
                 self.set_toast(door.locked_msg)
@@ -237,22 +237,20 @@ class Game:
         self.set_toast(f"Dropped: {display_name(item)}.")
 
     # --- ridge / combat ---------------------------------------------------
-    def try_ridge(self):
+    def _ridge_open(self) -> bool:
         w = self.world
         if w.flags.get("gloam_resolved"):
-            self.set_toast("The ridge is still now. The dark keeps its peace beside the town.")
-            return
-        lamps_lit = w.lit_lamp_count() == len(w.lamps)
-        if w.flags.get("map_read") and lamps_lit:
-            self.begin_combat(enemies_from_ids(["gloam"]), self._pledged_allies(),
-                              {"type": "gloam"})
-            return
+            return True
+        return bool(w.flags.get("map_read")) and w.lit_lamp_count() == len(w.lamps)
+
+    def _ridge_locked_msg(self) -> str:
+        w = self.world
         need = []
-        if not lamps_lit:
+        if w.lit_lamp_count() != len(w.lamps):
             need.append("the lamps lit behind you")
         if not w.flags.get("map_read"):
             need.append("to know the way (read Ansel's ridge map)")
-        self.set_toast("The dark swallows the path. You need " + " and ".join(need) + ".")
+        return "The dark swallows the path. You need " + " and ".join(need) + "."
 
     def _pledged_allies(self, exclude=None):
         return [combatant_from_npc(n, "ally") for n in self.world.npcs.values()
@@ -273,13 +271,21 @@ class Game:
                           {"type": "npc", "npc_id": npc_id})
 
     def check_encounters(self):
-        """A one-time gloamling ambush the first time you brave the ridge path."""
+        """Ridge encounters: creatures on the way up, the Gloam at the summit."""
         w = self.world
-        if (w.player.room == "path" and not w.flags.get("path_cleared")
-                and not w.flags.get("gloam_resolved")):
-            self.set_toast("The dark stirs on the path...")
-            self.begin_combat(enemies_from_ids(["gloamling", "gloamling"]),
-                              self._pledged_allies(), {"type": "creature"})
+        room = w.player.room
+        if w.flags.get("gloam_resolved"):
+            return
+        if room == "ridge_summit":
+            self.begin_combat(enemies_from_ids(["gloam"]), self._pledged_allies(),
+                              {"type": "gloam"})
+        elif room in ("ridge_foot", "ridge_pass"):
+            flag = f"{room}_cleared"
+            if not w.flags.get(flag):
+                ids = ["gloamling"] if room == "ridge_foot" else ["gloamling", "gloamling"]
+                self.set_toast("Something moves in the snow...")
+                self.begin_combat(enemies_from_ids(ids), self._pledged_allies(),
+                                  {"type": "creature", "room": room})
 
     def on_combat_end(self, outcome):
         w = self.world
@@ -304,9 +310,13 @@ class Game:
                            + (f" {lost} coins slipped away." if lost else ""))
             return
         if outcome == "fled":
-            if ctx["type"] == "npc":
-                w.npcs[ctx["npc_id"]].flags["hostile"] = False
-            self.set_toast("You break off the fight and get clear.")
+            if ctx["type"] in ("creature", "gloam"):
+                w.player.room, w.player.x, w.player.y = "path", 9, 11
+                self.set_toast("You scramble back down the ridge.")
+            else:
+                if ctx["type"] == "npc":
+                    w.npcs[ctx["npc_id"]].flags["hostile"] = False
+                self.set_toast("You break off the fight and get clear.")
             return
 
         # won or spared
@@ -318,10 +328,10 @@ class Game:
             w.events.record("gloam", f"{verb} The Hearthlight steadies and the dusk lifts.")
             self.set_toast("The dusk lifts. Emberhold will hold.")
         elif ctx["type"] == "creature":
-            w.flags["path_cleared"] = True
+            w.flags[f"{ctx.get('room', 'ridge')}_cleared"] = True
             verb = "drive off" if outcome == "won" else "quiet"
-            w.events.record("fight", f"You {verb} the gloamlings on the ridge path.")
-            self.set_toast("The path is clear, for now.")
+            w.events.record("fight", f"You {verb} the gloamlings on the ridge.")
+            self.set_toast("The snow settles. The way is clear.")
         else:
             npc_id = ctx["npc_id"]
             npc = w.npcs[npc_id]

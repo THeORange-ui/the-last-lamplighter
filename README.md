@@ -38,10 +38,15 @@ Save As / Save and Quit). Walk up to an NPC and press E to talk; type freely; pr
 Enter to send.
 
 In the inventory you can **Use** items (read the ridge map, eat food to heal) or
-**Drop** them on the ground. Press **I** *during a conversation* to open a trade view
-with both inventories: **Gift** or **Sell** your items, **Ask for** or **Buy** theirs.
+**Drop** them on the ground. Press **Ctrl/Cmd** *during a conversation* to open a trade
+view with both inventories: **Gift** or **Sell** your items, **Ask for** or **Buy** theirs.
 Gifting and asking go through the NPC's own judgement; buying and selling use coins at
 fixed catalog prices.
+
+Read Ansel's ridge map and light every lamp, and the ridge path opens — a snow-swept climb
+with creatures to fight (or spare) and, at the summit, the Gloam. In combat, **Act** opens
+a free-text box: you say something to the enemy, and it answers. Reach what it truly wants
+and you can spare it instead of destroying it.
 
 Saves are named slots under `save/` — each one bundles the whole world *and* every
 NPC's memory, so loading a slot restores the relationships and conversations exactly
