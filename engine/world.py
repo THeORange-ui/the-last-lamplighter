@@ -186,6 +186,8 @@ def starter_quest() -> Quest:
         giver="wren",
         objective=Objective(type="interact", target="lamp", count=3),
         reward=Reward(type="affinity", value="15"),
+        # After the lamps, Wren decides where the player's path leads next.
+        followups=[{"kind": "decide_later"}],
     )
 
 
@@ -212,6 +214,9 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
         player=PlayerState(room="square", x=9, y=8, inventory=["coin"] * 5),
         npcs=npcs,
         lamps=lamps,
-        ground_items=[GroundItem("ridge_pass", 3, 3, "tonic")],  # a supply to find
+        ground_items=[
+            GroundItem("ridge_pass", 3, 3, "tonic"),          # a supply to find
+            GroundItem("ridge_foot", 5, 8, "worn_staff"),     # Ansel's staff, on the ridge
+        ],
     )
     return state, rooms, known_entities(rooms, npc_ids)

@@ -31,7 +31,8 @@ def draw_journal(screen, world):
                   T.font(16), T.TEXT_DIM)
         y += 24
     for q in active:
-        draw_text(screen, f"• {q.title}  ({q.progress}/{q.objective.count})",
+        chain = "  (continues your path)" if getattr(q, "parent", None) else ""
+        draw_text(screen, f"• {q.title}  ({q.progress}/{q.objective.count}){chain}",
                   (margin + 8, y), T.font(16, bold=True), T.TEXT_WARN)
         y += 22
         draw_text(screen, q.description, (margin + 24, y), T.font(14), T.TEXT_DIM)

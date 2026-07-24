@@ -36,9 +36,10 @@ in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk 
 - **Clear the runtime state** so the next session/playthrough starts clean and no test-run
   memory lingers: empty `runtime_memory/` and `save/` (they're gitignored, so this is a local
   hygiene step, not a commit). Headless/live tests write real files into both — delete them
-  when done:
+  when done (this form is zsh-safe on an already-empty dir; a bare `rm -f dir/*.json` aborts
+  under zsh when the glob matches nothing):
   ```bash
-  rm -f runtime_memory/*.json save/*.json
+  find runtime_memory save -maxdepth 1 -name '*.json' -delete
   ```
 
 ## The core invariant (read this before touching NPC behavior)
@@ -59,9 +60,17 @@ Three layers enforce this, and changes usually touch all three:
    `ACTION_SETS`, and add a validated branch. (`join_combat` is a legacy alias of `join_party`.)
 2. **`engine/quests.py`** — quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
    target must resolve via `KnownEntities`). `build_quest()` raises `QuestValidationError` for
-   ungrounded targets; `refresh_and_complete()` recomputes progress from world state every turn
-   and grants rewards. `KnownEntities` (rooms/npcs/items/interactable_kinds) is the whitelist
-   everything grounds against.
+   ungrounded targets; `refresh_and_complete(state, known)` recomputes progress from world
+   state every turn, grants rewards, and opens **follow-ups**. `KnownEntities`
+   (rooms/npcs/items/interactable_kinds) is the whitelist everything grounds against.
+   **Quest trees:** a `Quest` has a `parent` and a list of `followups` — each a concrete
+   `{"kind":"quest", ...}` (built and activated immediately on completion) or
+   `{"kind":"decide_later"}` (a leaf; the default). A `decide_later` node on completion sets
+   `flags["pending_continuation::<giver>"]`; the **commissioner** is simply the giver's own
+   dialogue agent (`npc/agent.py` `_commission_block` + the per-turn nudge), which authors the
+   next quest when the player next talks (or concludes the arc). The flag clears after that
+   turn. Note `refresh_and_complete` needs `known` to build concrete children — pass it
+   (call sites in `main.py`/`agent.act` do).
 3. **`engine/items.py`** — the item catalog is a **closed set**. NPCs can only `offer_item`
    things actually in their own `inventory`; the LLM cannot invent items.
 
@@ -162,8 +171,9 @@ A staged roadmap turning the framework into a real game, tracked in
 - **Phase 1 (done)** — character **kinds** + action-set gating (see `npc/actions.py`).
 - **Phase 2 (done)** — **party & recruitment** with real ally combat AI (see the
   Companions/party notes above).
-- **Phase 3** — quest **trees** + "commissioner" continuations (quests that branch and
-  continue; the giver's own agent designs the next stage). Default follow-up is *decide-later*.
+- **Phase 3 (done)** — quest **trees** + "commissioner" continuations (see the quest-tree
+  note under the core invariant). Default follow-up is *decide-later*; the starter lamp quest
+  now chains into whatever Wren decides next.
 - **Phase 4** — functional **places**: camp (rest heals + advances a `day` + restocks),
   storage, and a `vendor`-kind shop with per-day stock.
 - **Phase 5 (last)** — rebuild the map into a **linear** A→B→…→Ridge progression + light

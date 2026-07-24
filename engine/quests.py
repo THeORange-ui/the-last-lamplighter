@@ -47,6 +47,12 @@ class Quest:
     reward: Reward
     status: str = "active"        # active | complete
     progress: int = 0
+    parent: str | None = None     # the quest this one continues (a chain node)
+    # What happens when this quest completes. Each entry is either
+    #   {"kind": "decide_later"}  — the giver invents the next step when next talked to
+    #   {"kind": "quest", "quest": {<quest dict>}}  — a concrete next node, activated now
+    # A "decide_later" node is a leaf: it has no children (they're decided at that point).
+    followups: list = field(default_factory=list)
 
     def summary(self) -> str:
         return f"{self.title} — {self.description}"
@@ -56,7 +62,26 @@ class QuestValidationError(ValueError):
     pass
 
 
-def build_quest(data: dict, giver: str, known: "KnownEntities") -> Quest:
+def _parse_followups(raw) -> list:
+    """Normalize a quest's follow-ups. Defaults to a single 'decide_later' node so
+    arcs continue by default; a 'decide_later' node is a leaf (its own children are
+    only decided when it activates), so any nested children are dropped."""
+    if not isinstance(raw, list) or not raw:
+        return [{"kind": "decide_later"}]
+    out: list = []
+    for fu in raw:
+        if not isinstance(fu, dict):
+            continue
+        kind = str(fu.get("kind", "")).strip()
+        if kind == "decide_later":
+            out.append({"kind": "decide_later"})
+        elif kind == "quest" and isinstance(fu.get("quest"), dict):
+            out.append({"kind": "quest", "quest": fu["quest"]})
+    return out or [{"kind": "decide_later"}]
+
+
+def build_quest(data: dict, giver: str, known: "KnownEntities",
+                parent: str | None = None) -> Quest:
     """Validate an LLM-proposed quest dict against known entities.
 
     Raises QuestValidationError if the objective/reward can't be grounded, so
@@ -109,6 +134,8 @@ def build_quest(data: dict, giver: str, known: "KnownEntities") -> Quest:
         giver=giver,
         objective=Objective(type=otype, target=target, count=count, npc=npc),
         reward=Reward(type=rtype, value=rvalue),
+        parent=parent,
+        followups=_parse_followups(data.get("followups")),
     )
 
 
@@ -148,11 +175,13 @@ def evaluate_progress(quest: Quest, state) -> int:
     return 0
 
 
-def refresh_and_complete(state, on_complete=None) -> list[Quest]:
-    """Update progress on active quests, mark completed ones, grant rewards.
+def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
+    """Update progress on active quests, mark completed ones, grant rewards, and
+    open any follow-ups.
 
     Returns the list of quests that just completed. `on_complete(quest)` is
-    called for each (used by the UI to announce completion).
+    called for each (used by the UI to announce completion). `known` is needed to
+    ground concrete follow-up quests; without it, only 'decide_later' nodes fire.
     """
     just_done: list[Quest] = []
     for q in state.active_quests():
@@ -161,10 +190,35 @@ def refresh_and_complete(state, on_complete=None) -> list[Quest]:
             q.status = "complete"
             _grant_reward(q, state)
             state.events.record("quest_complete", f"Completed the quest “{q.title}”.")
+            _activate_followups(q, state, known)
             just_done.append(q)
             if on_complete:
                 on_complete(q)
     return just_done
+
+
+def pending_continuation_key(giver: str) -> str:
+    return f"pending_continuation::{giver}"
+
+
+def _activate_followups(quest: Quest, state, known) -> None:
+    """When a quest completes, open its follow-ups: activate concrete child quests
+    now, and flag 'decide_later' nodes so the giver invents the next step when the
+    player next speaks with them (the commissioner)."""
+    for fu in quest.followups or []:
+        kind = fu.get("kind")
+        if kind == "decide_later":
+            state.flags[pending_continuation_key(quest.giver)] = quest.id
+        elif kind == "quest" and known is not None:
+            try:
+                child = build_quest(fu["quest"], giver=quest.giver, known=known,
+                                    parent=quest.id)
+            except QuestValidationError:
+                continue
+            if not state.has_quest(child.id):
+                state.quests.append(child)
+                state.events.record("quest_start",
+                                    f"A new task opens up: “{child.title}”.")
 
 
 def _grant_reward(quest: Quest, state) -> None:

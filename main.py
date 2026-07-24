@@ -222,7 +222,7 @@ class Game:
             )
             self._gather_party()          # companions follow you through the door
             self.try_pickup()
-            self.on_quests_completed(refresh_and_complete(self.world))  # "reach" objectives
+            self.on_quests_completed(refresh_and_complete(self.world, self.known))  # "reach"
             self.check_encounters()
             return
         if (tx, ty) in room.blocked() or self.occupied(tx, ty):
@@ -464,7 +464,7 @@ class Game:
                 room = self.rooms[self.world.player.room]
                 self.world.events.record("lamp_lit", f"You relit a lamp in {room.name}.")
                 self.set_toast("You pour the oil and coax the lamp back to light.")
-                self.on_quests_completed(refresh_and_complete(self.world))
+                self.on_quests_completed(refresh_and_complete(self.world, self.known))
         elif kind == "locked":
             self.set_toast(ident)
 
@@ -573,7 +573,7 @@ class Game:
                 combat_req = self.dialogue.combat_request
                 self.dialogue = None
                 self.scene = "overworld"
-                refresh_and_complete(self.world)
+                refresh_and_complete(self.world, self.known)
                 self._gather_party()      # snap a new companion in / close ranks
                 if combat_req:
                     self.start_npc_combat(combat_req)

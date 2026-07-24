@@ -15,7 +15,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from engine.items import catalog_for_prompt, display_name
-from engine.quests import refresh_and_complete
+from engine.quests import pending_continuation_key, refresh_and_complete
 from engine.state import affinity_label
 from llm.client import LLMError, complete_json
 from npc.actions import action_catalog, apply_actions
@@ -54,6 +54,8 @@ class TurnState(TypedDict, total=False):
     result: Any
     completed_quests: list
     error: str
+    commissioned_key: str
+    commissioned_parent: str
 
 
 def _world_briefing(world, rooms, known, npc_id) -> str:
@@ -133,6 +135,8 @@ Rules:
 - Keep dialogue short and natural. Use actions sparingly and only when they fit.
 - Let your affinity and memories shape your tone and what you're willing to do.
 """
+    system += _commission_block(world, npc_id, char)
+
     if state["player_input"] == APPROACH:
         if state["memory"].has_met():
             user = (
@@ -152,13 +156,49 @@ Rules:
             f'The player says to you: "{state["player_input"]}"\n\n'
             f'Respond now as {char["name"]}.'
         )
+
+    # If a continuation is pending, make this turn about deciding the next step.
+    parent_id = world.flags.get(pending_continuation_key(npc_id))
+    parent = world.quest_by_id(parent_id) if parent_id else None
+    if parent is not None:
+        user += (
+            f"\n\nIMPORTANT: the player has just completed “{parent.title}”, the task you "
+            "set them. React to that, and this turn decide their next step — give the "
+            "follow-up quest now (give_quest), or, if their path with you is truly done, "
+            "close it out warmly with no new quest."
+        )
     return system, user
+
+
+def _commission_block(world, npc_id, char) -> str:
+    """If the player finished a quest this NPC gave and its next step was left to be
+    'decided later', prompt the NPC (the commissioner) to author the continuation —
+    or, if the arc is done, to close it out."""
+    key = pending_continuation_key(npc_id)
+    parent_id = world.flags.get(key)
+    if not parent_id:
+        return ""
+    parent = world.quest_by_id(parent_id)
+    if parent is None:
+        return ""
+    return (
+        "\n# A thread to continue\n"
+        f"You earlier set the player on “{parent.title}”, and they have now completed it. "
+        "This turn, decide the NEXT step of their path with you: either give a follow-up "
+        "quest (a give_quest that builds naturally on what just happened — and it may itself "
+        "lead somewhere further), OR, if their story with you has reached its end, acknowledge "
+        "that warmly and give no new quest. Do not repeat a quest they have already done."
+    )
 
 
 # --- graph nodes -------------------------------------------------------------
 def perceive(state: TurnState) -> TurnState:
     system, user = _build_prompt(state)
-    return {"system": system, "user": user}
+    world, npc_id = state["world"], state["npc_id"]
+    key = pending_continuation_key(npc_id)
+    return {"system": system, "user": user,
+            "commissioned_key": key if world.flags.get(key) else None,
+            "commissioned_parent": world.flags.get(key)}
 
 
 def reason(state: TurnState) -> TurnState:
@@ -185,8 +225,14 @@ def act(state: TurnState) -> TurnState:
     # Mark that the player has spoken with this NPC (for talk_to objectives).
     world.npcs[npc_id].talked_to = True
 
-    # Progress/complete any quests affected by these actions.
-    completed = refresh_and_complete(world)
+    # The commissioner had its turn: retire the continuation prompt so the NPC isn't
+    # nagged again. (Skip if a *fresh* completion this turn re-set it for another quest.)
+    ckey = state.get("commissioned_key")
+    if ckey and world.flags.get(ckey) == state.get("commissioned_parent"):
+        del world.flags[ckey]
+
+    # Progress/complete any quests affected by these actions (may open follow-ups).
+    completed = refresh_and_complete(world, known)
 
     # Write a compact memory line.
     mem = state["memory"]

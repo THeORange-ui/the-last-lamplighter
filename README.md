@@ -70,6 +70,11 @@ on exit; `--fresh` wipes all saves and memory.
 | `llm/` | Loads `settings.json` and talks to the OpenAI-compatible endpoint, parsing JSON defensively (no reliance on the function-calling API). |
 | `ui/` | Pygame rendering + the dialogue overlay (free-text input, threaded turn, typewriter). |
 
+Quests **continue**: finishing one doesn't end the thread. Most quests leave their next
+step "to be decided", so when you return to whoever gave it, they react to what you did and
+set you on the next stage — an arc that grows out of the conversation rather than a fixed
+script (and can be brought to a close when your story with them is done).
+
 The LLM never mutates the game directly: it returns `dialogue + actions`, and
 `npc/actions.py` validates every action against real world entities before
 applying it. Ungrounded actions are dropped, so emergent quests stay completable.

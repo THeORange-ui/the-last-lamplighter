@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from engine.items import display_name
-from engine.quests import QuestValidationError, build_quest
+from engine.quests import (QuestValidationError, build_quest,
+                           pending_continuation_key)
 from engine.world import GRID_H, GRID_W, Room
 from npc.roster import character_name
 
@@ -158,8 +159,10 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             if not isinstance(raw.get("quest"), dict):
                 result.debug.append("give_quest without quest body")
                 continue
+            # If this NPC owes a continuation, link the new quest to the one it follows.
+            parent = state.flags.get(pending_continuation_key(npc_id))
             try:
-                quest = build_quest(raw["quest"], giver=npc_id, known=known)
+                quest = build_quest(raw["quest"], giver=npc_id, known=known, parent=parent)
             except QuestValidationError as e:
                 result.debug.append(f"dropped quest: {e}")
                 continue

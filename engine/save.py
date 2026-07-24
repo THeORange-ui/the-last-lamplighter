@@ -68,6 +68,7 @@ def _quest_to_dict(q: Quest) -> dict:
                       "count": q.objective.count, "npc": q.objective.npc},
         "reward": {"type": q.reward.type, "value": q.reward.value},
         "status": q.status, "progress": q.progress,
+        "parent": q.parent, "followups": q.followups,
     }
 
 
@@ -79,6 +80,7 @@ def _quest_from_dict(d: dict) -> Quest:
                             count=o.get("count", 1), npc=o.get("npc")),
         reward=Reward(type=r["type"], value=r["value"]),
         status=d.get("status", "active"), progress=d.get("progress", 0),
+        parent=d.get("parent"), followups=d.get("followups", []),
     )
 
 

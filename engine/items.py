@@ -39,6 +39,10 @@ ITEMS: dict[str, dict] = {
               "desc": "Salvaged metal and oddments a scavenger prizes."},
     "tonic": {"name": "Warming Tonic", "value": 12, "use": "drink", "heal": 20,
               "desc": "A bitter draught said to hold off the cold."},
+    "worn_staff": {"name": "Worn Lamplighter's Staff", "value": 18, "use": None,
+                   "desc": ("A tall ashwood staff, its ferrule scorched from years of "
+                            "lighting lamps. Initials are burned into the grip: A.W. — "
+                            "it was Ansel's, Wren's lost mentor.")},
 }
 
 ITEM_IDS = set(ITEMS)
