@@ -30,6 +30,9 @@ class Combatant:
     spareable: bool = False
     defending: bool = False
     alive: bool = True
+    # Set when this combatant already answered during the player's action (an ACT
+    # reply both speaks and strikes), so it doesn't also take a second turn.
+    acted: bool = False
 
     @property
     def is_enemy(self) -> bool:
@@ -206,16 +209,43 @@ def ally_step(combat: Combat, ally: Combatant) -> str:
     return ally_attack(combat, ally, target)
 
 
-def enemy_attack(combat: Combat, enemy: Combatant, *, heavy: bool = False) -> str:
-    """Mechanical enemy strike (used directly or as an LLM fallback)."""
+# How hard an enemy hits as its will to fight drains: full force at resolve 100,
+# down to RESOLVE_FLOOR of its strength at resolve 0. Reaching an enemy with words
+# makes its blows weaker — but it keeps swinging until it truly stands down.
+RESOLVE_FLOOR = 0.35
+# A held-back blow (it speaks more than it strikes) still costs the player something —
+# talking to a foe is never free, but it hurts less than a committed swing.
+RESTRAINED_MULT = 0.75
+
+
+def resolve_scale(enemy: Combatant) -> float:
+    if not enemy.persona:
+        return 1.0
+    r = max(0, min(100, enemy.resolve)) / 100
+    return RESOLVE_FLOOR + (1.0 - RESOLVE_FLOOR) * r
+
+
+def enemy_attack(combat: Combat, enemy: Combatant, *, heavy: bool = False,
+                 restrained: bool = False) -> str:
+    """Mechanical enemy strike (used directly or as an LLM fallback).
+
+    Damage scales with the enemy's remaining resolve; `restrained` is a held-back
+    blow (it speaks more than it strikes) and `heavy` a committed one.
+    """
     targets = [combat.player()] + combat.allies()
     targets = [t for t in targets if t.alive]
     if not targets:
         return ""
     target = targets[0]
     raw = enemy.attack + (3 if heavy else 0)
-    dmg = _apply_damage(target, raw)
-    verb = "lashes out at" if heavy else "reaches for"
+    raw = raw * resolve_scale(enemy) * (RESTRAINED_MULT if restrained else 1.0)
+    dmg = _apply_damage(target, max(1, int(round(raw))))
+    if restrained:
+        verb = "half-reaches for"
+    elif heavy:
+        verb = "lashes out at"
+    else:
+        verb = "reaches for"
     msg = f"{enemy.name} {verb} {target.name} — {dmg} damage."
     combat.add_log(msg)
     # a defender's brace lasts only for the hit it took

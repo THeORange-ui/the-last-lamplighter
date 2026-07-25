@@ -82,11 +82,15 @@ class CombatScene:
                     self.combat.check_end()
                 if not self.combat.over:
                     for enemy in list(self.combat.enemies()):
-                        if enemy.alive and not enemy.spareable:
+                        # An enemy that already answered an ACT this turn (speaking and
+                        # striking in one breath) doesn't get a second turn.
+                        if enemy.alive and not enemy.spareable and not enemy.acted:
                             enemy_turn(self.combat, enemy)
                         if self.combat.over:
                             break
                 self.combat.check_end()
+                for c in self.combat.combatants:
+                    c.acted = False          # clear for the next round
             finally:
                 self._busy = False
 

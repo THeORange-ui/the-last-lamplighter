@@ -74,9 +74,10 @@ def enemy_turn(combat: Combat, enemy: Combatant) -> str:
         "what the player just did (their last move), then take your turn. Reply as JSON: "
         '{\"say\": \"<one short line reacting to their move, in character>\", '
         '\"action\": \"attack\" | \"heavy\" | \"loom\"}. '
-        "attack = reach for them (normal), heavy = a stronger blow, loom = do no harm this "
-        "turn, only speak or gather. Choose loom sometimes if you are uncertain, hurt, or "
-        "reaching out rather than striking. Always say something."
+        "attack = reach for them (normal), heavy = a committed, stronger blow, loom = hold "
+        "back — you speak more than you strike, and the blow that lands is a weak one. "
+        "Choose loom when you are uncertain, hurt, or reaching out rather than striking. "
+        "You are still a danger: you always reach for them somehow. Always say something."
     )
     user = _state_block(combat, enemy) + "\n\nReact and act."
     try:
@@ -88,9 +89,9 @@ def enemy_turn(combat: Combat, enemy: Combatant) -> str:
     action = str(out.get("action", "attack")).strip().lower()
     if say:
         combat.add_log(f"{enemy.name}: “{say}”")
-    if action == "loom":
-        return ""
-    return enemy_attack(combat, enemy, heavy=(action == "heavy"))
+    # It speaks AND strikes: even holding back, it still reaches for you.
+    return enemy_attack(combat, enemy, heavy=(action == "heavy"),
+                        restrained=(action == "loom"))
 
 
 def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
@@ -105,6 +106,8 @@ def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
             combat.add_log(f"{enemy.name} falters, no longer eager to fight.")
             return f"{enemy.name} falters."
         combat.add_log(f"You try to reach {enemy.name}. It hesitates.")
+        enemy_attack(combat, enemy, restrained=True)   # reaching out is not free
+        enemy.acted = True
         return "It hesitates."
 
     system = (
@@ -126,6 +129,9 @@ def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
         combat.add_log(f"You reach out to {enemy.name}.")
         if enemy.resolve <= 0:
             enemy.spareable = True
+        else:
+            enemy_attack(combat, enemy, restrained=True)
+        enemy.acted = True
         return "You reach out."
 
     reaction = str(out.get("reaction", "")).strip()
@@ -142,6 +148,11 @@ def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
         combat.add_log(f"{enemy.name}: “{reaction}”")
     if enemy.spareable:
         combat.add_log(f"{enemy.name} no longer moves to strike. You could spare it.")
+    else:
+        # Undertale-style: it answers you and still reaches for you in the same breath.
+        # The more your words have worn its resolve, the weaker that blow lands.
+        enemy_attack(combat, enemy, restrained=True)
+    enemy.acted = True          # this WAS its turn; don't let it strike again
     return reaction or "..."
 
 

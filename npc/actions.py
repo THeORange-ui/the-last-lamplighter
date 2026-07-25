@@ -41,6 +41,12 @@ ACTIONS: dict[str, str] = {
         '- {"type": "reveal_fact", "fact": "<a concrete fact you disclose>"}\n'
         "    Share something true about the world/your past. Recorded to memory."
     ),
+    "use_item": (
+        '- {"type": "use_item", "item": "<item id you are CARRYING>"}\n'
+        "    Use something you hold: read a map or a book, eat or drink, try a key.\n"
+        "    Reading tells you what it says (you will remember it), and food is eaten up.\n"
+        "    Use this when the player hands you something you'd want to look at."
+    ),
     "tell": (
         '- {"type": "tell", "targets": ["<npc id>", ...], "info": "<what you pass on>"}\n'
         "    Pass word to other people you know — they will remember what you told them,\n"
@@ -78,10 +84,10 @@ ACTIONS: dict[str, str] = {
 # (quests, companionship, the works); a `vendor` mostly trades; a `minor` throwaway
 # NPC can only colour a scene and share a fact.
 ACTION_SETS: dict[str, list[str]] = {
-    "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact", "tell",
-             "move_to", "join_party", "leave_party", "attack", "end_dialogue"],
-    "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "end_dialogue"],
-    "minor": ["adjust_affinity", "reveal_fact", "end_dialogue"],
+    "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact", "use_item",
+             "tell", "move_to", "join_party", "leave_party", "attack", "end_dialogue"],
+    "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "end_dialogue"],
+    "minor": ["adjust_affinity", "reveal_fact", "use_item", "end_dialogue"],
 }
 
 # Legacy action aliases → their current name (kept so older prompts/saves still work).
@@ -198,6 +204,32 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             fact = str(raw.get("fact", "")).strip()
             if fact:
                 state.add_fact(fact)
+
+        elif atype == "use_item":
+            from engine.items import ITEMS
+            from npc.memory import NPCMemory
+            item = str(raw.get("item", "")).strip()
+            npc_inv = state.npcs[npc_id].inventory
+            if item not in known.items or item not in npc_inv:
+                result.debug.append(f"{npc_id} tried to use {item!r} it doesn't have")
+                continue
+            spec = ITEMS.get(item, {})
+            label = display_name(item)
+            use = spec.get("use")
+            # NPC use is deliberately NOT engine.use_item(): that applies *player*
+            # effects (healing the player, setting map_read). An NPC reading learns
+            # the contents itself; food it eats is simply gone.
+            if use == "read":
+                text = spec.get("read_text", "")
+                NPCMemory.remember_for(npc_id, f"You read the {label}. It said: {text}")
+                state.events.record("npc_use", f"{name} reads the {label}.", public=False)
+                result.effects.append(f"{name} reads the {label}.")
+            elif use in ("eat", "drink"):
+                npc_inv.remove(item)
+                verb = "eats" if use == "eat" else "drinks"
+                result.effects.append(f"{name} {verb} the {label}.")
+            else:
+                result.effects.append(f"{name} turns the {label} over in their hands.")
 
         elif atype == "tell":
             from npc.memory import NPCMemory

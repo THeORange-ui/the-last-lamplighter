@@ -60,8 +60,10 @@ in the **chest**. Townsfolk drift about their part of town as you play.
 
 Read Ansel's ridge map and light every lamp, and the ridge path opens — a snow-swept climb
 with creatures to fight (or spare) and, at the summit, the Gloam. In combat, **Act** opens
-a free-text box: you say something to the enemy, and it answers. Reach what it truly wants
-and you can spare it instead of destroying it.
+a free-text box: you say something to the enemy, and it answers — and still reaches for you
+in the same breath, so talking is never free. The more your words wear down its will, the
+weaker its blows land, until it no longer strikes at all and you can spare it instead of
+destroying it.
 
 Saves are named slots under `save/` — each one bundles the whole world *and* every
 NPC's memory, so loading a slot restores the relationships and conversations exactly

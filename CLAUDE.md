@@ -61,6 +61,10 @@ Three layers enforce this, and changes usually touch all three:
    The `main` set includes `tell` — one NPC passes word to others, writing a line into each
    target's memory via `NPCMemory.remember_for` (a live-instance registry keeps that write on
    the same object the game holds), so NPCs stay informed without the player re-explaining.
+   Every kind has `use_item` (out of combat): an NPC uses something in **its own** inventory —
+   reading writes the `read_text` into that NPC's memory (so hand them a map/book and they
+   actually learn it), food is consumed. It deliberately does **not** call
+   `engine.items.use_item`, which applies *player* effects (healing the player, `map_read`).
 2. **`engine/quests.py`** — quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
    target must resolve via `KnownEntities`). `build_quest()` raises `QuestValidationError` for
    ungrounded targets; `refresh_and_complete(state, known)` recomputes progress from world
@@ -99,7 +103,12 @@ Three layers enforce this, and changes usually touch all three:
 - `combat.py` — turn-based logic: `Combatant`, `Combat`, `make_combat`, `enemies_from_ids`,
   the `ENEMIES` bestiary, `player_attack/defend/spare`, `enemy_attack`,
   `ally_attack/ally_defend/ally_spare/ally_step`, `combatant_from_npc`. Pure logic;
-  `ui/combat.py` is the scene.
+  `ui/combat.py` is the scene. **Enemies always answer an action with a blow**
+  (Undertale-style): `enemy_attack` scales damage by `resolve_scale()` (full force at resolve
+  100 down to `RESOLVE_FLOOR`) and takes `restrained=` for a held-back hit
+  (`RESTRAINED_MULT`). An ACT reply speaks *and* strikes, so `mercy_attempt` sets
+  `Combatant.acted` and `ui/combat.py` skips that enemy's regular turn (clearing the flags
+  after the round) — otherwise it would hit twice. Only a **spareable** enemy stops attacking.
 - `quests.py`, `items.py`, `trade.py` (coin economy — `buy_from_npc`/`sell_to_npc` at catalog
   value for AI gift/ask; **`shop_buy`/`shop_sell` add a margin** (`SHOP_MARKUP`/
   `SHOP_SELL_FACTOR`) for `vendor` NPCs, whose stock `restock_vendor(state, id, day)` refills
@@ -144,9 +153,14 @@ the JSON object), raising `LLMError` on failure.
   `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural low-res pixel art,
   nearest-scaled; no binary art committed).
 - **Places & the day:** the camp room has `campfire`/`chest` fixtures (`main.interact` →
-  `rest_at_camp` heals + `day++` + restocks vendors; chest → `StoragePanel`). Idle NPCs wander
-  via `main._ambient_step` (pace + occasionally hop one room, home-biased; **vendors and the
-  ridge are excluded** so the shop stays findable and townsfolk don't stray onto the mountain).
+  `rest_at_camp` heals + `day++` + restocks vendors; chest → `StoragePanel`).
+- **Ambient movement** (`main._ambient_step`): each idle NPC holds a runtime
+  `{mode: "still"|"wander", timer}` in `Game._ambient` — **everyone starts standing still**,
+  and after *every* step chooses to take another (`P_KEEP_WANDERING`, `STEP_DELAY`) or settle
+  for `STILL_MIN..STILL_MAX` seconds. So they move in short bursts rather than jittering. A
+  wander step is usually in-room, sometimes through a door (home-biased). **Vendors, party
+  members and the ridge are excluded** so the shop stays findable and townsfolk don't stray
+  onto the mountain.
 - **Companions/party:** recruiting and parting are both **emergent** — a `main` NPC emits
   `join_party` (or `leave_party`) and `world.party` changes. `main.py` trails party members
   behind the player (`_place_followers` / `_gather_party`, a per-frame "snake" using

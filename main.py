@@ -34,11 +34,15 @@ from ui.render import draw_hud, draw_overworld, draw_text
 MOVE_DELAY = 0.12   # seconds between grid steps while a direction is held
 TOAST_TIME = 2.6
 
-# --- ambient NPC wandering ---
-AMBIENT_TICK = 0.8          # seconds between wander ticks
-P_PACE = 0.5               # chance an NPC paces to a nearby tile on a tick
-P_HOP_FROM_HOME = 0.12     # chance an NPC drifts into an adjacent room
-P_RETURN_HOME = 0.5        # chance an away NPC heads back toward its home room
+# --- ambient NPC movement ---
+# Each idle NPC alternates between standing still and wandering: after every step
+# it decides whether to take another or settle. Everyone starts standing still, so
+# the world is calm until someone chooses to move.
+STEP_DELAY = 0.55           # seconds between steps while wandering
+STILL_MIN, STILL_MAX = 4.0, 12.0    # how long a standing NPC stays put
+P_KEEP_WANDERING = 0.55     # after a step, chance of taking another rather than stopping
+P_HOP_ROOM = 0.18           # chance a wander step goes through a door instead
+P_RETURN_HOME = 0.6         # chance an away NPC's room-hop heads back home
 # Townsfolk never wander onto the ridge.
 AMBIENT_BLOCKED_ROOMS = {"ridge_foot", "ridge_pass", "ridge_summit"}
 
@@ -94,7 +98,7 @@ class Game:
         self.storage_open = False
         self.storage_panel: StoragePanel | None = None
         self._trail: list[tuple[int, int]] = []   # player's recent tiles (for followers)
-        self._ambient_timer = 0.0
+        self._ambient: dict[str, dict] = {}       # per-NPC {mode, timer}; runtime only
         self.running = True
         self._gather_party()
 
@@ -323,36 +327,59 @@ class Game:
                 taken.add(spot)
         self._reset_trail()
 
-    # --- ambient NPC wandering -------------------------------------------
+    # --- ambient NPC movement ---------------------------------------------
+    def _still_time(self):
+        return random.uniform(STILL_MIN, STILL_MAX)
+
+    def _ambient_state(self, nid):
+        """Per-NPC {mode, timer}. Everyone starts standing still."""
+        st = self._ambient.get(nid)
+        if st is None:
+            st = {"mode": "still", "timer": self._still_time()}
+            self._ambient[nid] = st
+        return st
+
     def _ambient_step(self, dt):
-        """Idle NPCs pace about and occasionally drift a room over (biased home).
-        Party members, vendors, and the ridge are left alone."""
-        self._ambient_timer -= dt
-        if self._ambient_timer > 0:
-            return
-        self._ambient_timer = AMBIENT_TICK
+        """Idle NPCs alternate between standing still and wandering: after each step
+        they choose to keep going or settle. Party members, vendors and the ridge are
+        left alone."""
         pr = self.world.player.room
         ppos = (self.world.player.x, self.world.player.y)
         for nid, npc in self.world.npcs.items():
             if nid in self.world.party or is_vendor(nid):
                 continue
-            home = NPC_SPAWNS.get(nid, (npc.room,))[0]
-            room = self.rooms[npc.room]
-            if npc.room != home:
+            st = self._ambient_state(nid)
+            st["timer"] -= dt
+            if st["timer"] > 0:
+                continue
+            if st["mode"] == "still":
+                # Done standing about — set off wandering, starting with a step.
+                st["mode"] = "wander"
+            self._npc_wander_step(nid, npc, pr, ppos)
+            # After moving, decide: another step, or stand still a while?
+            if random.random() < P_KEEP_WANDERING:
+                st["timer"] = STEP_DELAY
+            else:
+                st["mode"] = "still"
+                st["timer"] = self._still_time()
+
+    def _npc_wander_step(self, nid, npc, player_room, ppos):
+        """One wander step: usually a tile within the room, sometimes through a door
+        (biased back toward home when away)."""
+        home = NPC_SPAWNS.get(nid, (npc.room,))[0]
+        room = self.rooms[npc.room]
+        if random.random() < P_HOP_ROOM:
+            if npc.room != home and random.random() < P_RETURN_HOME:
                 back = next((d for d in room.doors if d.to_room == home), None)
-                if back and random.random() < P_RETURN_HOME:
-                    self._npc_through_door(npc, back, pr, ppos)
-                    continue
-                self._npc_pace(npc, pr, ppos)
-            elif random.random() < P_HOP_FROM_HOME:
-                doors = [d for d in room.doors
-                         if not d.locked and d.to_room not in AMBIENT_BLOCKED_ROOMS]
-                if doors:
-                    self._npc_through_door(npc, random.choice(doors), pr, ppos)
-                else:
-                    self._npc_pace(npc, pr, ppos)
-            elif random.random() < P_PACE:
-                self._npc_pace(npc, pr, ppos)
+                if back:
+                    self._npc_through_door(npc, back, player_room, ppos)
+                    return
+            doors = [d for d in room.doors
+                     if not d.locked and d.to_room not in AMBIENT_BLOCKED_ROOMS]
+            if doors:
+                self._npc_through_door(npc, random.choice(doors), player_room, ppos)
+                return
+        self._npc_pace(npc, player_room, ppos)
 
     def _npc_pace(self, npc, player_room, ppos):
         dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
