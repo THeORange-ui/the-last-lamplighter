@@ -224,6 +224,13 @@ the JSON object), raising `LLMError` on failure.
   trailing follower doesn't perpetually snag it. A companion only leaves when you ask them to
   in that conversation and they choose `leave_party` (they may `move_to` off somewhere as they
   go). There is no menu "dismiss" button by design.
+- **`move_to` from a companion IS leaving.** You can't walk elsewhere and still be at someone's
+  shoulder — so the handler removes them from the party first. Without that the move silently
+  no-opped, since `_place_followers` snaps the party back to the player every frame. The prompt
+  says so too: a companion goes where the player goes automatically and never needs to move
+  itself. **`RIDGE_ROOMS` are not a valid `move_to` target for anyone** (nor an ambient wander
+  target) — a character reaches the ridge by travelling there *with* the player, not by
+  announcing it and teleporting into the Gloam's room.
 
 ## Controls / key routing gotchas
 

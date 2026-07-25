@@ -25,6 +25,11 @@ TILE = 32
 GRID_W = 19
 GRID_H = 13
 
+# The climb. Nobody goes up here on their own between conversations: townsfolk don't
+# wander onto it (main._ambient_step) and an NPC can't `move_to` it (npc/actions.py).
+# A character reaches the ridge by walking it *with* the player, as a companion.
+RIDGE_ROOMS = {"ridge_foot", "ridge_pass", "ridge_summit"}
+
 
 @dataclass
 class Door:

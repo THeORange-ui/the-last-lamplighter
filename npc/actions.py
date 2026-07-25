@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from engine.items import display_name
 from engine.quests import QuestValidationError, build_quest, find_check_back
-from engine.world import GRID_H, GRID_W, Room
+from engine.world import GRID_H, GRID_W, RIDGE_ROOMS, Room
 from npc.roster import character_name
 
 # --- the action vocabulary, one doc block per action type --------------------
@@ -77,7 +77,12 @@ ACTIONS: dict[str, str] = {
     ),
     "move_to": (
         '- {"type": "move_to", "room": "<room id>"}\n'
-        "    Leave to go somewhere. This ends the conversation."
+        "    Walk off to somewhere else. This ends the conversation.\n"
+        "    If you are travelling WITH the player, this also means you LEAVE their\n"
+        "    company — you cannot walk somewhere else and still be at their side. Only\n"
+        "    use it if you truly mean to part ways. To go somewhere together, just say so\n"
+        "    and let them lead; you follow them everywhere already.\n"
+        "    Nobody walks up onto the ridge alone."
     ),
     "join_party": (
         '- {"type": "join_party"}\n'
@@ -330,10 +335,26 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             if room is None:
                 result.debug.append(f"dropped move to unknown room {room_id!r}")
                 continue
+            if room_id in RIDGE_ROOMS:
+                # Walking up the ridge alone is not a thing anyone survives, and the
+                # summit is the Gloam's room. A character gets up there by travelling
+                # with the player, not by announcing it and teleporting.
+                result.debug.append(f"{npc_id} tried to walk off to {room_id!r} alone")
+                continue
             npc = state.npcs[npc_id]
+            # Walking off IS leaving: a companion who goes somewhere stops following.
+            # Without this the move silently did nothing, because the party gets
+            # snapped back to the player's side every frame.
+            parted = state.remove_from_party(npc_id)
+            if parted:
+                npc.flags.pop("ally_pledged", None)
+                result.left_party = True
+                state.events.record("party", f"{name} left your company.", public=True)
             npc.room = room_id
             npc.x, npc.y = _free_interior_tile(room, room.blocked())
-            result.effects.append(f"{name} leaves for {room.name}.")
+            result.effects.append(
+                f"{name} parts ways with you and leaves for {room.name}." if parted
+                else f"{name} leaves for {room.name}.")
             result.end_dialogue = True
 
         elif atype == "join_party":

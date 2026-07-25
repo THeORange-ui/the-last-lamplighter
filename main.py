@@ -23,7 +23,7 @@ from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
                             witnesses)
 from npc.bonds import bond_for
 from npc.interject import choose_interjector, interject
-from engine.world import NPC_SPAWNS
+from engine.world import NPC_SPAWNS, RIDGE_ROOMS
 from engine.world import ensure_world_complete, new_world
 from npc.memory import NPCMemory
 from npc.roster import character_name
@@ -51,7 +51,7 @@ P_KEEP_WANDERING = 0.55     # after a step, chance of taking another rather than
 P_HOP_ROOM = 0.18           # chance a wander step goes through a door instead
 P_RETURN_HOME = 0.6         # chance an away NPC's room-hop heads back home
 # Townsfolk never wander onto the ridge.
-AMBIENT_BLOCKED_ROOMS = {"ridge_foot", "ridge_pass", "ridge_summit"}
+AMBIENT_BLOCKED_ROOMS = RIDGE_ROOMS
 
 DIRS = {
     pygame.K_LEFT: (-1, 0), pygame.K_a: (-1, 0),

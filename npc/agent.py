@@ -228,6 +228,10 @@ Rules:
             "into every room they entered and through every fight. You have seen what they "
             "did, first-hand. Never greet them as though they have just arrived or come "
             "back from somewhere; you were there.\n"
+            "You go wherever they go, automatically. So you never need to move yourself to "
+            "join them somewhere: if you want the two of you to go to the ridge, say so and "
+            "walk with them. Using move_to would mean walking away ALONE and leaving their "
+            "company — do that only if you actually mean to part ways.\n"
         )
     system += _commission_block(world, npc_id, char)
 
