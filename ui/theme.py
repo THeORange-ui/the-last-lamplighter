@@ -26,6 +26,9 @@ BIOMES = {
     "town": {"floor": (30, 28, 44), "floor_alt": (34, 32, 50), "wall": (54, 50, 74)},
     "snow": {"floor": (40, 50, 74), "floor_alt": (46, 58, 84), "wall": (92, 112, 150)},
     "camp": {"floor": (44, 34, 34), "floor_alt": (50, 38, 36), "wall": (78, 60, 52)},
+    # the chapel and its vault: dry pale stone, and something colder underneath
+    "stone": {"floor": (46, 45, 52), "floor_alt": (52, 51, 58), "wall": (92, 90, 100)},
+    "under": {"floor": (26, 27, 34), "floor_alt": (30, 31, 38), "wall": (60, 58, 70)},
 }
 DOOR = (96, 84, 132)
 DOOR_LOCKED = (70, 40, 40)

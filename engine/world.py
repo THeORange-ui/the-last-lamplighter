@@ -39,6 +39,15 @@ class Door:
     spawn: tuple[int, int]
     locked: bool = False
     locked_msg: str = ""
+    # A door that opens on knowledge rather than a key: passable once this world flag
+    # is set (by reading something, or by a character explaining it). See
+    # engine.items.READ_FLAGS and npc.actions.FACT_FLAGS.
+    requires_flag: str = ""
+
+    def passable(self, state) -> bool:
+        if self.locked:
+            return False
+        return not self.requires_flag or bool(state.flags.get(self.requires_flag))
 
 
 @dataclass
@@ -252,8 +261,295 @@ def build_rooms() -> dict[str, Room]:
         biome="snow",
         doors=[Door(x=9, y=0, to_room="ridge_pass", spawn=(9, GRID_H - 2))],
     )
+    # --- the town, off the spine ------------------------------------------
+    lamp_store = Room(
+        id="lamp_store",
+        name="The Lamplighters' Store",
+        desc="Ansel's workshop, and Wren's. Racks of empty flasks, a bench worn into a "
+             "dip where someone sat every evening for thirty years, and the smell of "
+             "cold oil. Two aprons hang by the door. Only one of them gets used.",
+        features=["racks of empty oil flasks", "a bench worn into a dip",
+                  "two aprons on one hook"],
+        biome="stone",
+        interactables=[
+            Interactable(
+                id="ansel_bench", kind="bench", pos=(5, 4), name="Ansel's bench",
+                desc="The workbench, with a lamplighter's tools still laid out in the "
+                     "order somebody liked them in.",
+                hint="E: look over the bench", once=True,
+                effects=[{"add_fact": "Ansel kept his bench in strict order, and left "
+                                      "it that way the evening he went up the ridge — "
+                                      "he meant to come back to it."}],
+                use_msg="The tools are laid out for tomorrow. Nobody has moved them.",
+                witness_msg="You stood with the player at Ansel's bench, where his tools "
+                            "are still set out for a morning that didn't come.",
+                spent_hint="his tools, still in order"),
+        ],
+        doors=[Door(x=9, y=GRID_H - 1, to_room="square", spawn=(9, 1))],
+    )
+    chapel = Room(
+        id="chapel",
+        name="The Lamp Chapel",
+        desc="A small stone chapel to nothing in particular — the lamplighters' own, "
+             "where the keeping-rites were said over the oil. Cold, swept, and still "
+             "used by exactly one person.",
+        features=["a low stone altar with a lamp cut into it", "swept flagstones",
+                  "a stair going down at the back"],
+        biome="stone",
+        interactables=[
+            Interactable(
+                id="chapel_shrine", kind="shrine", pos=(9, 3), name="the lamp altar",
+                desc="An altar with a lamp carved into the stone, ringed by a circle.",
+                hint="E: read the altar", once=True,
+                effects=[{"add_fact": "The lamplighters' mark is a lamp inside a ring — "
+                                      "a sigil, cut wherever they sealed something away."},
+                         {"give_item": "rite_book"}],
+                use_msg="The same mark is cut into the altar: a lamp, inside a ring. A "
+                        "book of the rites lies open beneath it.",
+                witness_msg="You read the lamp altar in the chapel with the player.",
+                spent_hint="a lamp, inside a ring"),
+        ],
+        doors=[
+            Door(x=9, y=0, to_room="square", spawn=(9, GRID_H - 2)),
+            Door(x=9, y=GRID_H - 1, to_room="undercroft", spawn=(9, 1)),
+        ],
+    )
+    undercroft = Room(
+        id="undercroft",
+        name="The Undercroft",
+        desc="Under the chapel: a long, dry vault where the lamplighters kept their "
+             "stores. It runs further east than it should — toward the tavern — and "
+             "that end is closed off by a door with the sigil cut into it.",
+        features=["stone shelving, mostly bare", "a sealed door at the east end",
+                  "a sigil cut into the door: a lamp inside a ring"],
+        biome="under",
+        interactables=[
+            Interactable(
+                id="ansel_cache", kind="cache", pos=(4, 4), name="a lamplighter's cache",
+                desc="A stone locker at the back of the vault, its lid pushed aside "
+                     "already. Somebody came for something here, and left the rest.",
+                hint="E: search the cache", once=True,
+                effects=[{"give_item": "ansel_note"}, {"give_item": "oil_flask"}],
+                use_msg="Oil, a spare wick — and a page folded small, tucked where it "
+                        "would be found.",
+                witness_msg="You were there when the player opened the old cache in the "
+                            "undercroft and found a folded page inside.",
+                spent_hint="emptied"),
+            Interactable(
+                id="sigil_door", kind="sigil", pos=(R - 1, MIDY), name="the sigil door",
+                desc="The sealed east door. The mark on it is a lamp inside a ring; the "
+                     "ring is cut open at the top.",
+                hint="E: work the sigil",
+                requires={"flag": "sigil_known",
+                          "flag_msg": "The mark means something, but not to you. Someone "
+                                      "who kept lamps would know it."},
+                effects=[{"set_flag": "undercroft_open"}],
+                use_msg="You close the ring with a wet thumb, the way the rite says. The "
+                        "door gives inward onto the tavern's cellar.",
+                witness_msg="You watched the player undo the lamplighters' sigil and open "
+                            "the old way through to the tavern cellar.",
+                blocks=False, once=True, spent_hint="the ring is closed"),
+        ],
+        doors=[
+            Door(x=9, y=0, to_room="chapel", spawn=(9, GRID_H - 2)),
+            Door(x=R, y=MIDY, to_room="cellar", spawn=(1, MIDY),
+                 requires_flag="undercroft_open",
+                 locked_msg="The sigil door is sealed. The mark is a lamp in a ring."),
+        ],
+    )
+    well_yard = Room(
+        id="well_yard",
+        name="The Well Yard",
+        desc="A yard behind the market with the town's well in it. The rope still turns, "
+             "which is more than most things here do. Children are told to stay out and "
+             "come here anyway.",
+        features=["a deep well with a working windlass", "a wall low enough to sit on",
+                  "chalk marks on the flagstones"],
+        interactables=[
+            Interactable(
+                id="the_well", kind="well", pos=(9, 5), name="the well",
+                desc="The town well. Something small and bright is caught on the rope, "
+                     "a little way down.",
+                hint="E: turn the windlass", once=True,
+                effects=[{"give_item": "lost_locket"}],
+                use_msg="The bucket comes up wet and empty — but there's a tin locket "
+                        "snagged on the rope below it.",
+                witness_msg="You watched the player wind up the well and find a tin "
+                            "locket caught on the rope.",
+                spent_hint="just water now"),
+        ],
+        doors=[Door(x=9, y=GRID_H - 1, to_room="market", spawn=(9, 1))],
+    )
+    farm_track = Room(
+        id="farm_track",
+        name="The Farm Track",
+        desc="A rutted track south off the Old Road, running out to the last farm still "
+             "worked. Hedges on both sides, and every few yards a lamp-post with no lamp "
+             "left in it.",
+        features=["empty lamp-posts along the hedge", "deep frozen ruts",
+                  "a gate standing open"],
+        obstacles={(5, 3), (13, 9)},
+        doors=[
+            Door(x=9, y=0, to_room="road", spawn=(9, GRID_H - 2)),
+            Door(x=R, y=MIDY, to_room="outfarm", spawn=(1, MIDY)),
+        ],
+    )
+    outfarm = Room(
+        id="outfarm",
+        name="The Outfarm",
+        desc="The last worked farm in the valley: a low house, a byre, and fields that "
+             "have given up. It is further from the Hearthlight than anyone else lives, "
+             "and it shows in how dark the yard is.",
+        features=["a byre with two thin cows", "a house with one lit window",
+                  "fields gone to frost"],
+        obstacles={(4, 4), (5, 4), (6, 4), (14, 8), (15, 8)},
+        interactables=[
+            Interactable(
+                id="outfarm_post", kind="lamp_post", pos=(9, 3), name="the farm's lamp-post",
+                desc="A lamp-post by the farm gate with no lamp in the bracket at all. "
+                     "The glass was taken out and never put back.",
+                hint="E: check the lamp-post", once=True,
+                effects=[{"add_fact": "The outfarm's lamp was taken away years ago and "
+                                      "never replaced — the farm has been keeping itself "
+                                      "dark at the edge of the valley ever since."}],
+                use_msg="Empty bracket, and rust where the glass sat. Nobody has kept "
+                        "this one in a long time.",
+                spent_hint="an empty bracket"),
+        ],
+        doors=[Door(x=0, y=MIDY, to_room="farm_track", spawn=(R - 1, MIDY))],
+    )
+    # --- the ridge, off the climb -----------------------------------------
+    ridge_shelf = Room(
+        id="ridge_shelf",
+        name="The Ridge — Shelf",
+        biome="snow",
+        desc="A wide shelf of rock off the climb, out of the wind. You can see the whole "
+             "valley from here, and the town in it, very small. There is a way down the "
+             "scree from the far side — quick, and only downward.",
+        features=["the whole valley laid out below", "a scree slope going down",
+                  "shelter from the wind"],
+        obstacles={(6, 3), (7, 3)},
+        interactables=[
+            Interactable(
+                id="shelf_view", kind="vantage", pos=(9, 4), name="the valley edge",
+                desc="The lip of the shelf, where the whole of Emberhold is visible at "
+                     "once — every lamp in it, lit or dark.",
+                hint="E: look out over the valley", once=True,
+                effects=[{"add_fact": "From the ridge shelf you can see every lamp in "
+                                      "Emberhold at once, and how far the dark has come "
+                                      "in from the valley's edges."}],
+                use_msg="The town is a handful of small lights, and the dark stands "
+                        "around it like water around a stone.",
+                witness_msg="You stood with the player on the shelf and looked down at "
+                            "the whole of Emberhold, lit and unlit.",
+                blocks=False, spent_hint="the valley, below"),
+        ],
+        doors=[
+            Door(x=0, y=MIDY, to_room="ridge_foot", spawn=(R - 1, MIDY)),
+            Door(x=R, y=MIDY, to_room="snow_cairn", spawn=(1, MIDY)),
+            # One-way: you can go down the scree, but not back up it.
+            Door(x=9, y=GRID_H - 1, to_room="camp", spawn=(9, 2)),
+        ],
+    )
+    snow_cairn = Room(
+        id="snow_cairn",
+        name="The Ridge — Cairn",
+        biome="snow",
+        desc="A cairn of stacked stones at the end of the shelf, half buried. People "
+             "have been putting stones on it for longer than the Gloam has been awake. "
+             "Some of the stones have names scratched into them.",
+        features=["a cairn of stacked stones", "names scratched into the lower stones",
+                  "snow drifted up one side"],
+        interactables=[
+            Interactable(
+                id="the_cairn", kind="cairn", pos=(9, 6), name="the cairn",
+                desc="A memorial cairn. The names on it are of people who went up the "
+                     "ridge and did not come down.",
+                hint="E: read the names", once=True,
+                effects=[{"add_fact": "The cairn on the ridge carries the names of those "
+                                      "who went up and never came down. Cael's name is "
+                                      "on it. Ansel's is not — nobody has put a stone "
+                                      "there for him yet."}],
+                use_msg="Names, cut small to save room. One of them is CAEL. There is no "
+                        "stone for Ansel.",
+                witness_msg="You read the cairn on the ridge with the player. Cael's name "
+                            "is cut into it. Ansel's is not there at all.",
+                spent_hint="the names"),
+        ],
+        doors=[Door(x=0, y=MIDY, to_room="ridge_shelf", spawn=(R - 1, MIDY))],
+    )
+    wind_shrine = Room(
+        id="wind_shrine",
+        name="The Ridge — Wind Shrine",
+        biome="snow",
+        desc="A niche cut into the rock beside the pass, where lamplighters used to "
+             "leave a light burning for whoever was still up the mountain. The niche is "
+             "out of the wind. There is something set down carefully inside it.",
+        features=["a niche cut for a lamp", "old wax run down the stone",
+                  "shelter, of a kind"],
+        interactables=[
+            Interactable(
+                id="the_niche", kind="niche", pos=(9, 5), name="the lamp niche",
+                desc="The shrine niche. A hand lantern stands in it, upright, its glass "
+                     "cracked through and its wick burned away to nothing.",
+                hint="E: take what's in the niche", once=True,
+                effects=[{"give_item": "ansel_lantern"}],
+                use_msg="A lamplighter's lantern, set down square in the middle of the "
+                        "niche. Whoever left it here took the time to stand it upright.",
+                witness_msg="You were with the player at the wind shrine when they lifted "
+                            "a cracked lamplighter's lantern out of the niche.",
+                spent_hint="an empty niche"),
+        ],
+        doors=[Door(x=0, y=MIDY, to_room="ridge_pass", spawn=(R - 1, MIDY))],
+    )
+    the_hollow = Room(
+        id="the_hollow",
+        name="The Ridge — The Hollow",
+        biome="snow",
+        desc="A bowl in the rock off the windward side where the air does not move at "
+             "all. The wind is loud everywhere else on this mountain and silent here. "
+             "The cold in the hollow is not the same cold as outside it.",
+        features=["air that does not move", "no wind sound at all", "cold that pools"],
+        obstacles={(4, 8), (14, 4)},
+        interactables=[
+            Interactable(
+                id="still_air", kind="stillness", pos=(9, 6), name="the still air",
+                desc="The middle of the hollow, where the cold sits deepest and the "
+                     "quiet has a shape to it.",
+                hint="E: stand in the stillness", once=True,
+                effects=[{"add_fact": "In the hollow on the ridge the cold pools and the "
+                                      "air goes silent, and people who stand in it hear "
+                                      "themselves called by names only they know."}],
+                use_msg="The quiet leans in. For a moment it sounds very much like "
+                        "somebody saying your name, kindly, from a long way off.",
+                witness_msg="You stood in the still air of the hollow with the player, "
+                            "and heard what it does there.",
+                blocks=False, spent_hint="quiet, and waiting"),
+        ],
+        doors=[Door(x=R, y=MIDY, to_room="ridge_pass", spawn=(1, MIDY))],
+    )
+
+    # New doors onto the existing spine (kept here so the spine reads plainly above).
+    square.doors += [
+        Door(x=9, y=0, to_room="lamp_store", spawn=(9, GRID_H - 2)),
+        Door(x=9, y=GRID_H - 1, to_room="chapel", spawn=(9, 1)),
+    ]
+    cellar.doors.append(
+        Door(x=0, y=MIDY, to_room="undercroft", spawn=(R - 1, MIDY),
+             requires_flag="undercroft_open",
+             locked_msg="A sealed door, with a lamp-and-ring cut into it."))
+    market.doors.append(Door(x=9, y=0, to_room="well_yard", spawn=(9, GRID_H - 2)))
+    road.doors.append(Door(x=9, y=GRID_H - 1, to_room="farm_track", spawn=(9, 1)))
+    ridge_foot.doors.append(Door(x=R, y=MIDY, to_room="ridge_shelf", spawn=(1, MIDY)))
+    ridge_pass.doors += [
+        Door(x=0, y=MIDY, to_room="the_hollow", spawn=(R - 1, MIDY)),
+        Door(x=R, y=MIDY, to_room="wind_shrine", spawn=(1, MIDY)),
+    ]
+
     rooms = (square, tavern, cellar, market, road, home, camp,
-             ridge_foot, ridge_pass, ridge_summit)
+             ridge_foot, ridge_pass, ridge_summit,
+             lamp_store, chapel, undercroft, well_yard, farm_track, outfarm,
+             ridge_shelf, snow_cairn, wind_shrine, the_hollow)
     return {r.id: r for r in rooms}
 
 

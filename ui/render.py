@@ -68,7 +68,7 @@ def draw_overworld(screen, world, rooms):
 
     # doors
     for d in room.doors:
-        color = T.DOOR_LOCKED if d.locked else T.DOOR
+        color = T.DOOR if d.passable(world) else T.DOOR_LOCKED
         r = _tile_rect(d.x, d.y).inflate(-6, -6)
         pygame.draw.rect(screen, color, r, border_radius=4)
 
@@ -107,6 +107,8 @@ def draw_overworld(screen, world, rooms):
                              border_radius=3)
             pygame.draw.rect(screen, (60, 44, 26), r, 2, border_radius=3)
             pygame.draw.rect(screen, (230, 200, 120), (r.centerx - 2, r.centery - 1, 4, 5))
+        else:
+            _draw_prop(screen, inter, pal)
 
     # dropped items on the floor
     for g in world.ground_items_in(room.id):
@@ -122,6 +124,52 @@ def draw_overworld(screen, world, rooms):
 
     # player
     _draw_actor(screen, world.player.x, world.player.y, "player", None)
+
+
+# Everything else usable in the world gets a simple prop, keyed by kind: a shape and
+# two colours is enough to read as "there is a thing here" at this scale.
+_PROPS = {
+    "bench":    ("slab",   (108, 88, 62),  (74, 58, 40)),
+    "shrine":   ("altar",  (150, 148, 160), (96, 94, 108)),
+    "cache":    ("slab",   (120, 116, 128), (78, 76, 88)),
+    "sigil":    ("ring",   (206, 172, 96), (120, 96, 48)),
+    "well":     ("round",  (110, 106, 118), (66, 64, 76)),
+    "lamp_post": ("post",  (86, 84, 96),   (54, 52, 64)),
+    "cairn":    ("stack",  (176, 184, 204), (110, 120, 146)),
+    "niche":    ("altar",  (150, 158, 182), (92, 100, 124)),
+    "vantage":  ("ring",   (150, 168, 200), (92, 108, 140)),
+    "stillness": ("ring",  (120, 132, 168), (70, 80, 110)),
+}
+
+
+def _draw_prop(screen, inter, pal):
+    shape, fill, edge = _PROPS.get(inter.kind, ("slab", (110, 106, 118), (66, 64, 76)))
+    r = _tile_rect(*inter.pos)
+    if shape == "slab":
+        box = r.inflate(-8, -16)
+        box.bottom = r.bottom - 5
+        pygame.draw.rect(screen, fill, box, border_radius=2)
+        pygame.draw.rect(screen, edge, box, 2, border_radius=2)
+    elif shape == "altar":
+        box = r.inflate(-10, -14)
+        pygame.draw.rect(screen, fill, box, border_radius=3)
+        pygame.draw.rect(screen, edge, box, 2, border_radius=3)
+        pygame.draw.circle(screen, edge, (box.centerx, box.centery), 4, 1)
+    elif shape == "ring":
+        pygame.draw.circle(screen, edge, r.center, int(T.TILE * 0.30), 3)
+        pygame.draw.circle(screen, fill, r.center, int(T.TILE * 0.11))
+    elif shape == "round":
+        pygame.draw.circle(screen, fill, r.center, int(T.TILE * 0.30))
+        pygame.draw.circle(screen, edge, r.center, int(T.TILE * 0.30), 2)
+        pygame.draw.circle(screen, (18, 20, 28), r.center, int(T.TILE * 0.16))
+    elif shape == "post":
+        pygame.draw.rect(screen, fill, (r.centerx - 2, r.y + 8, 4, T.TILE - 14))
+        pygame.draw.rect(screen, edge, (r.centerx - 6, r.y + 6, 12, 4))
+    elif shape == "stack":
+        for i, (w, h) in enumerate(((18, 7), (13, 6), (8, 5))):
+            pygame.draw.rect(screen, fill if i % 2 == 0 else edge,
+                             (r.centerx - w // 2, r.bottom - 8 - i * 6, w, h),
+                             border_radius=2)
 
 
 def _draw_actor(screen, tx, ty, key, name):

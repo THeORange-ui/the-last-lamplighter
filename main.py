@@ -267,7 +267,7 @@ class Game:
             if inter is not None and not inter.hidden:
                 return ("use", inter)
             door = room.door_at(tx, ty)
-            if door and door.locked:
+            if door and not door.passable(self.world):
                 return ("locked", door.locked_msg)
         return (None, None)
 
@@ -279,7 +279,7 @@ class Game:
             # A used-up thing shows its spent hint, or nothing at all (a lit lamp).
             return ident.hint if is_live(self.world, ident) else ident.spent_hint
         if kind == "locked":
-            return "the ridge path is sealed"
+            return ident or "it will not open"
         return ""
 
     # --- overworld actions ------------------------------------------------
@@ -292,8 +292,8 @@ class Game:
             if door.to_room == "ridge_foot" and not self._ridge_open():
                 self.set_toast(self._ridge_locked_msg())
                 return
-            if door.locked:
-                self.set_toast(door.locked_msg)
+            if not door.passable(self.world):
+                self.set_toast(door.locked_msg or "It will not open.")
                 return
             p.room = door.to_room
             p.x, p.y = door.spawn
@@ -444,7 +444,7 @@ class Game:
                     self._npc_through_door(npc, back, player_room, ppos)
                     return
             doors = [d for d in room.doors
-                     if not d.locked and d.to_room not in AMBIENT_BLOCKED_ROOMS]
+                     if d.passable(self.world) and d.to_room not in AMBIENT_BLOCKED_ROOMS]
             if doors:
                 self._npc_through_door(npc, random.choice(doors), player_room, ppos)
                 return

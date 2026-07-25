@@ -139,6 +139,11 @@ def action_catalog(kind: str = "main") -> str:
     return _CATALOG_HEADER + "\n" + "\n".join(blocks) + "\n"
 
 
+# Telling the player about one of these is itself the key to a lock — the engine
+# records that they now know it. Mirrors engine.items.READ_FLAGS, which does the same
+# when the player reads it for themselves.
+FACT_FLAGS = {"sigil": "sigil_known"}
+
 _AFFINITY_CLAMP = 25
 _MAX_ACTIONS = 6
 _MAX_OFFER = 10          # most of one item an NPC can hand over in a single action
@@ -265,6 +270,14 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             fact = str(raw.get("fact", "")).strip()
             if fact:
                 state.add_fact(fact)
+                # A puzzle's key is knowledge somebody holds: if what they just told you
+                # covers a lock, you now know how to work it. Several characters know
+                # each of these, so no one refusal can seal a path (see CLAUDE.md on
+                # redundancy over scripting).
+                low = fact.lower()
+                for word, flag in FACT_FLAGS.items():
+                    if word in low:
+                        state.flags[flag] = True
 
         elif atype == "use_item":
             from engine.items import ITEMS

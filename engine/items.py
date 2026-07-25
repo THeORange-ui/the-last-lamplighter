@@ -43,10 +43,41 @@ ITEMS: dict[str, dict] = {
                    "desc": ("A tall ashwood staff, its ferrule scorched from years of "
                             "lighting lamps. Initials are burned into the grip: A.W. — "
                             "it was Ansel's, Wren's lost mentor.")},
+    # --- the Ansel chain: staff (ridge foot) -> lantern (wind shrine) -> last note ---
+    "ansel_lantern": {"name": "Ansel's Lantern", "value": 22, "use": None,
+                      "desc": ("A lamplighter's hand lantern, the glass starred with "
+                               "cracks and the wick burned to nothing. Still shut, still "
+                               "dry inside. Whoever set it down did it carefully.")},
+    "ansel_note": {"name": "Ansel's Last Note", "value": 5, "use": "read",
+                   "desc": "A single page, folded small, in a lamplighter's hand.",
+                   "read_text": ("'If you are reading this then I did not come back, and "
+                                 "I am sorry for it. It is not a beast. It is cold and it "
+                                 "is by itself and it does not know what it is doing to "
+                                 "us. Do not bring a blade up here and think that answers "
+                                 "it. Wren — you kept better lamps than I did at your age. "
+                                 "Keep them. Do not follow me. — A.'")},
+    "rite_book": {"name": "Book of Lamplighters' Rites", "value": 14, "use": "read",
+                  "desc": "A chapel book of the old keeping-rites, more habit than faith.",
+                  "read_text": ("Mostly prayers for oil and patience. One page is "
+                                "practical: the lamplighters sealed their stores with a "
+                                "sigil, a lamp inside a ring, and the mark is undone by "
+                                "drawing the ring closed with a wet thumb — 'so that the "
+                                "light is never locked away from the one who tends it.'")},
+    "cael_coat": {"name": "Cael's Coat", "value": 6, "use": None,
+                  "desc": ("A heavy winter coat, far too small for Bram, kept brushed and "
+                           "folded. It has been ready by the door for years.")},
+    "lost_locket": {"name": "Tin Locket", "value": 4, "use": None,
+                    "desc": "A cheap tin locket on a broken cord, the catch worn smooth."},
 }
 
 ITEM_IDS = set(ITEMS)
 CURRENCY = "coin"
+
+# Reading these sets a world flag — the player now KNOWS something, and knowing is
+# what opens the matching lock (see engine/interact.py `requires: {"flag": ...}`).
+# A character explaining the same thing sets the same flag (npc/actions.py FACT_FLAGS),
+# so no single source can gate a path on its own.
+READ_FLAGS = {"ridge_map": "map_read", "rite_book": "sigil_known"}
 
 
 def is_item(item_id: str) -> bool:
@@ -101,8 +132,10 @@ def use_item(state, item_id: str) -> UseResult:
                 consumed=True)
         return UseResult(f"You {verb} the {name}, but you're already hale.", consumed=True)
     if use == "read":
-        if item_id == "ridge_map":
-            state.flags["map_read"] = True
+        # Reading something can be a key: knowing how a lock works is what opens it.
+        flag = READ_FLAGS.get(item_id)
+        if flag:
+            state.flags[flag] = True
         return UseResult(spec.get("read_text", "There's nothing written here."), consumed=False)
     if use == "key":
         return UseResult(f"The {name} fits nothing here.", consumed=False)
