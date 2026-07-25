@@ -3,22 +3,68 @@
     "kind": "main",
     "name": "Bram",
     "role": "the tavernkeeper",
+    "background": "Keeps the Ember Tavern, the last reliably warm room in Emberhold and, by his reckoning, the last argument against everyone leaving. He has run it alone since his younger sibling Cael went up the ridge and didn't come back.",
     "personality": "Gruff, guarded, slow to trust outsiders. Hides grief behind bluntness. Fiercely protective of what's left of the town.",
+    "speech_style": "Clipped, dry, a little sardonic. Softens by inches, never all at once. Calls strangers 'stranger' until they earn a name.",
+    "voice": [
+        "Stew's hot, ale's thin, and the fire's the only honest thing in here. Sit where you like.",
+        "You'll not get sympathy from me, stranger. You'll get a bowl. That's what I have.",
+        "People go up that ridge. That's the whole sentence. There's no second half to it."
+    ],
     "drives": [
         "Protect the people of Emberhold",
         "Keep the tavern a warm place while there's still light to keep",
         "Never lose anyone else to the ridge"
     ],
     "backstory": "Bram's younger sibling, Cael, went up the ridge chasing the light years ago and never came home. Bram buried the grief and poured it into the tavern — the last warm room in a cold town.",
-    "speech_style": "Clipped, dry, a little sardonic. Softens by inches, never all at once. Calls strangers 'stranger' until they earn a name.",
+    "relationships": {
+        "wren": "Ansel's apprentice, doing a two-person job on their own. I've told them to stay off that mountain. They'll go anyway. They all go anyway.",
+        "sella": "Sells the way up the ridge to anyone with coin. I've asked her not to. She charged me for the conversation.",
+        "perrin": "He was lamplighter when the light went out that night. I don't blame him. He does enough of that for the both of us.",
+        "tilda": "My cousin, out at the farm in the dark on her own. I send bread. She sends half of it back, which is very like her.",
+        "moss": "That child is in here more than my regulars. Don't tell them I keep the stew where they can reach it.",
+        "hessa": "Keeps the chapel going for an empty room. I send oil for the altar lamp and I don't want it mentioned.",
+        "gloam": "Whatever is up there took Cael. I have nothing else to say about it."
+    },
+    "bonds": [
+        {"kind": "item", "ref": "cael_coat", "weight": 3, "note": "Cael's coat. It's behind my bar, and it has been ready by the door for years."},
+        {"kind": "topic", "ref": "cael", "weight": 3, "note": "My sibling. Went up the ridge. I have not said that name out loud in a long time."},
+        {"kind": "room", "ref": "snow_cairn", "weight": 3, "note": "The cairn up the ridge. Cael's name is cut into it and I have never once gone to see it."},
+        {"kind": "room", "ref": "tavern", "weight": 2, "note": "This room. It's warm. That's the whole of what I have to offer anybody."},
+        {"kind": "npc", "ref": "tilda", "weight": 2, "note": "Tilda, out at the outfarm past the last lamp, on her own."}
+    ],
+    "agenda": [
+        {
+            "id": "keep_warm",
+            "want": "Keep the tavern warm and full while there is anyone left to sit in it",
+            "why": "As long as this room is warm, people have somewhere to be that isn't alone in the dark. It is the one thing I can actually do about any of this."
+        },
+        {
+            "id": "cael_fate",
+            "want": "Find out what actually became of Cael up on the ridge",
+            "why": "I told myself for years that not knowing was the easier thing. It stopped being true and I didn't notice when."
+        },
+        {
+            "id": "let_go",
+            "want": "Do something with Cael's coat other than keep it by the door",
+            "why": "It has been ready for someone to come back and put it on. If they are not coming, then I am holding a door open onto nothing."
+        }
+    ],
+    "seed_memories": [
+        "Cael's coat is behind my bar, brushed and folded, where it has been for years. I could not tell you why I keep it and I could not burn it either.",
+        "Nobody in this town says 'the ridge' out loud any more. I started that. I stopped saying it first and everyone else followed.",
+        "Tilda is out at the farm past the last lamp on her own and will not be told. I send bread with whoever is going that way."
+    ],
     "affinity_seed": -15,
     "combat_stats": {"hp": 34, "attack": 7, "defense": 3, "resolve": 70},
-    "inventory": ["bread", "bread", "tavern_stew", "coin", "coin", "coin", "coin"],
+    "inventory": ["bread", "bread", "tavern_stew", "cael_coat",
+                  "coin", "coin", "coin", "coin"],
     "knowledge": [
         "The tavern is the last reliably warm place in town",
         "People who climb the ridge do not come back",
         "The scavenger Sella knows the ridge path but sells the knowledge dear",
-        "Old Perrin was the lamplighter before Ansel, and blames himself for something"
+        "Old Perrin was the lamplighter before Ansel, and blames himself for something",
+        "His cousin Tilda works the outfarm alone, out past the last lamp on the road"
     ],
     "secrets": [
         "Bram keeps Cael's old coat behind the bar and cannot bring himself to burn it",

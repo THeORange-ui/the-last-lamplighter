@@ -34,10 +34,12 @@ def _persona_block(enemy: Combatant) -> str:
     if not enemy.persona:
         return f"You are {enemy.name}, a hostile creature of the ridge dark."
     char = load_character(enemy.persona)
+    voice = "".join(f'\n- "{ln}"' for ln in (char.get("voice") or []))
     return (
         f"You are {char['name']} — {char.get('role', '')}.\n"
         f"Personality: {char.get('personality', '')}\n"
-        f"What drives you: {'; '.join(char.get('drives', []))}\n"
+        + (f"How you sound (catch the rhythm, don't reuse verbatim):{voice}\n" if voice else "")
+        + f"What drives you: {'; '.join(char.get('drives', []))}\n"
         f"Backstory: {char.get('backstory', '')}\n"
         f"Speech style: {char.get('speech_style', '')}\n"
         f"Hidden truths about you: {'; '.join(char.get('secrets', []))}"

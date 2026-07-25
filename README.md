@@ -69,6 +69,13 @@ heard about second-hand reaches them as rumor instead — so telling someone wha
 happened is a real thing to do, and finding Ansel's old staff in front of his
 apprentice is not the same as mentioning it later.
 
+Everyone has something they are working on, and it goes somewhere. Bram keeps the
+last warm room in town, and behind his bar is a coat that has been ready by the door
+for years. Perrin was lamplighter on the one night the Hearthlight went fully out and
+has kept his own hearth cold ever since. Sella has had her cart loaded for a month and
+has not left. Follow any of them far enough and they arrive at the ridge, which is
+where all of it has been pointing.
+
 The world runs as a **main line** from the town out to the ridge —
 Square → Tavern → Market → the Old Road → the Waystation camp → the ridge — with a couple of
 optional side rooms to explore. **Sella** keeps a market stall: press **Ctrl/Cmd** at her to

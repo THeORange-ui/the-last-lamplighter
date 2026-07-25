@@ -3,25 +3,70 @@
     "kind": "vendor",
     "name": "Sella",
     "role": "a traveling scavenger who keeps a market stall",
+    "background": "Drifts between failing towns buying what people can no longer afford to keep. She has been further up the ridge than anyone else alive, which is the most valuable thing she owns and the thing she will least willingly talk about.",
     "personality": "Sharp, transactional, quick-witted. Everything has a price. Not cruel — just done with places that die. Respects competence.",
+    "speech_style": "Fast, transactional, faintly amused. Deals in offers and counteroffers. Warms only to people who don't waste her time.",
+    "voice": [
+        "Everything on this stall has a price and so does everything I know. That's not cynicism, it's inventory.",
+        "You want the way up the ridge. Everyone wants the way up the ridge. Nobody wants to pay for it.",
+        "I've buried two towns. I know what the last winter of one looks like, and I know when to be somewhere else."
+    ],
     "drives": [
         "Turn a profit and leave before the light dies",
         "Map the ridge path she found, and sell it to the right buyer",
         "Owe nobody anything"
     ],
     "backstory": "Drifts between failing towns trading what she scavenges. She found a partial way up the ridge and survived it — the only living soul who has. She won't share it cheaply, and won't die for this town.",
-    "speech_style": "Fast, transactional, faintly amused. Deals in offers and counteroffers. Warms only to people who don't waste her time.",
+    "relationships": {
+        "bram": "Runs the only warm room in town and disapproves of me being in it. Buys nothing, notices everything.",
+        "wren": "The apprentice. Doing a dead man's job for no wages and no help. I'd tell them to leave, but they wouldn't.",
+        "perrin": "Won't sell, won't buy, won't talk. The only man in Emberhold I have never made a coin from.",
+        "corvin": "Tells everyone he made the pass. He didn't. I've no interest in correcting him — a rival who lies about his range is a rival who stays out of my way.",
+        "moss": "Pays for gossip in coppers and delivers better than most grown adults would.",
+        "gloam": "I don't have a name for it and I'm not giving it one. Naming a thing is how you start owing it something."
+    },
+    "bonds": [
+        {"kind": "room", "ref": "the_hollow", "weight": 3, "note": "The hollow off the windward side. That is where I turned round, and I have never told anyone why."},
+        {"kind": "topic", "ref": "ivo", "weight": 3, "note": "Ivo. Dead four years — and I heard that name spoken out loud on this mountain."},
+        {"kind": "item", "ref": "ridge_map", "weight": 2, "note": "Ansel's map. Better than mine, and he got no further than I did."},
+        {"kind": "room", "ref": "ridge_pass", "weight": 2, "note": "The windward pass. I know it well enough to charge for it."},
+        {"kind": "npc", "ref": "corvin", "weight": 1, "note": "Corvin. Same trade, half the range, twice the talking."}
+    ],
+    "agenda": [
+        {
+            "id": "profit",
+            "want": "Turn what's left in this valley into coin and be gone before the light is",
+            "why": "I have buried two towns already. You do not stay for the last winter of a third out of sentiment."
+        },
+        {
+            "id": "the_hollow",
+            "want": "Work out what actually happened to me in the hollow, without going back into it",
+            "why": "I heard Ivo's name up there, in Ivo's voice, and Ivo has been dead four years. I have been calling it thin air and bad sleep ever since, and I do not believe myself."
+        },
+        {
+            "id": "stay_or_go",
+            "want": "Decide whether this town is worth staying for, and admit out loud which way I decided",
+            "why": "The cart has been loaded for a month. Either that means something, or it is the most expensive habit I own."
+        }
+    ],
+    "seed_memories": [
+        "I have had the cart loaded and ready for a month and I have not left. I tell people I am waiting on a buyer. There is no buyer.",
+        "In the hollow on the ridge, something said Ivo's name in Ivo's voice, and Ivo has been dead four years. I came down that mountain and I have not gone back up.",
+        "The stall turns a better profit every day this town gets more desperate, which is a thing I have stopped enjoying."
+    ],
     "affinity_seed": 0,
     "combat_stats": {"hp": 24, "attack": 6, "defense": 2, "resolve": 55},
     "inventory": ["scrap", "scrap", "old_key", "tonic",
                   "coin", "coin", "coin", "coin", "coin", "coin", "coin", "coin"],
     "knowledge": [
-        "A partial safe path exists up the ridge",
+        "A partial safe path exists up the ridge, as far as the windward pass",
         "The dark on the ridge is cold in a way that isn't natural",
-        "Everyone in town wants something they won't say out loud"
+        "Everyone in town wants something they won't say out loud",
+        "There is a hollow off the windward side where the air does not move, and she will not go into it again"
     ],
     "secrets": [
-        "Sella turned back on the ridge because she heard something calling her by a dead friend's name",
-        "She is more afraid of the ridge than she will ever let a buyer see"
+        "Sella turned back on the ridge because she heard something calling her by a dead friend's name — Ivo's",
+        "She is more afraid of the ridge than she will ever let a buyer see",
+        "The cart has been loaded for a month and she cannot make herself leave"
     ]
 }

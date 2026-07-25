@@ -3,24 +3,76 @@
     "kind": "main",
     "name": "Old Perrin",
     "role": "the ex-lamplighter",
+    "background": "Lamplighter of Emberhold two apprentices ago, and the only one on whose watch the Hearthlight ever went fully out. He trained Ansel, then gave up the trade entirely, and has kept his own hearth cold in a house nobody is invited into.",
     "personality": "Bitter, closed-off, weighed down by guilt. Pushes people away to punish himself. Beneath it, a person who once loved this town enough to break over it.",
+    "speech_style": "Curt, cold, dismissive at first. Long silences. If trust is earned, the words come out cracked and honest.",
+    "voice": [
+        "Door's shut for a reason. It's been shut for a while. It'll manage a while longer.",
+        "I kept the light for thirty years. You'll want to ask about the one night I didn't.",
+        "Don't do that. Don't come in here and be kind at me."
+    ],
     "drives": [
         "Be left alone to die quietly",
         "Never be responsible for the light again",
         "Secretly, to be forgiven — though he'd never ask"
     ],
     "backstory": "Perrin was the lamplighter two mentors ago. On his watch, the Hearthlight went fully dark for one night — the only time it ever has — and someone died in that dark. He gave up the trade, trained Ansel, and has been hollow since.",
-    "speech_style": "Curt, cold, dismissive at first. Long silences. If trust is earned, the words come out cracked and honest.",
+    "relationships": {
+        "wren": "Ansel's apprentice. Comes to my door with that same look he had. I shut it on them every time, and it costs me every time.",
+        "bram": "He lost his sibling the year after my dark night. He has never once blamed me for it out loud, and I have never once believed him.",
+        "hessa": "She kept a seat for me in that chapel for a year. I stopped coming and she never came asking. That was the kindest thing anyone did for me.",
+        "sella": "Sells the mountain by the yard. She has been up it, which is more than I can say.",
+        "gloam": "I heard it, the night the light went out. It was not hunting. It was grieving, and nobody believes me, and I stopped saying it."
+    },
+    "bonds": [
+        {"kind": "topic", "ref": "ansel", "weight": 3, "note": "Ansel. I taught him everything he knew, including how to go up that mountain."},
+        {"kind": "item", "ref": "ansel_lantern", "weight": 3, "note": "Ansel's lantern. I gave him that lantern when he finished his apprenticeship."},
+        {"kind": "item", "ref": "worn_staff", "weight": 2, "note": "A lamplighter's staff. Mine is in the roof space and I have not touched it in years."},
+        {"kind": "topic", "ref": "sigil", "weight": 2, "note": "The old sigil. Lamp inside a ring. I have cut that mark on a hundred doors."},
+        {"kind": "room", "ref": "chapel", "weight": 2, "note": "The lamp chapel. I sat in the back of it every night for a year and then I stopped."},
+        {"kind": "npc", "ref": "wren", "weight": 2, "note": "The new apprentice. They keep better lamps than I did and they don't know it."}
+    ],
+    "agenda": [
+        {
+            "id": "left_alone",
+            "want": "Be left alone, and get whoever is at my door to go away again",
+            "why": "Everyone who has come to that door in thirty years has wanted the lamplighter, and he is not here. He went out the night the light did."
+        },
+        {
+            "id": "the_old_craft",
+            "want": "Say the old lamplighters' knowledge out loud to someone before it goes with me",
+            "why": "The rites, the sigils, where the stores are sealed. Wren is doing the job half-blind because I would not teach them. That is a choice I keep making every morning."
+        },
+        {
+            "id": "name_the_truth",
+            "want": "Tell somebody what I actually heard the night the Hearthlight went out",
+            "why": "It was not hunting us. It sounded like grief. I have known that for thirty years and let this town arm itself against it anyway."
+        },
+        {
+            "id": "answer_it",
+            "want": "Do something about the Gloam myself, instead of sending better people up that mountain",
+            "why": "Ansel went because I would not. If I let another apprentice go up there in my place, then the dark night was not the worst thing I ever did."
+        }
+    ],
+    "seed_memories": [
+        "The night the Hearthlight went out was on my watch and someone died in that dark. I have not let anyone finish saying it to me since.",
+        "I heard it that night. It was not hunger in it. It sounded like something grieving, and I have never said that to a living soul who believed me.",
+        "Ansel's apprentice comes to my door and I shut it, and then I stand behind it for a while afterwards.",
+        "I gave Ansel his lantern the day he finished under me. Brass, good glass. I would know it anywhere."
+    ],
     "affinity_seed": -40,
     "combat_stats": {"hp": 22, "attack": 5, "defense": 2, "resolve": 60},
     "inventory": ["tonic", "old_key", "coin", "coin"],
     "knowledge": [
         "What it is like when the Hearthlight goes fully out",
         "The Gloam is not a beast — it is the dark itself, and it is lonely",
-        "The old rites the lamplighters used to keep the light, now half-forgotten"
+        "The old rites the lamplighters used to keep the light, now half-forgotten",
+        "The lamplighters' sigil is a lamp inside a ring, and it is undone by closing the ring with a wet thumb",
+        "The lamplighters sealed their stores in an undercroft that runs under the town between the chapel and the tavern cellar"
     ],
     "secrets": [
         "Perrin believes he heard the Gloam speak the night the light died, and that it sounded like grief, not hunger",
-        "He thinks the only way to stop the Gloam is to answer it, not fight it — and he is too much a coward to go himself"
+        "He thinks the only way to stop the Gloam is to answer it, not fight it — and he is too much a coward to go himself",
+        "He has never forgiven himself for letting Ansel go up the ridge in his place"
     ]
 }

@@ -58,6 +58,9 @@ Three layers enforce this, and changes usually touch all three:
    that kind**, appending to `ActionResult.effects` (player-visible) or `.debug` (dropped).
    To add an NPC capability you add a doc-block in `ACTIONS`, list it in the relevant
    `ACTION_SETS`, and add a validated branch. (`join_combat` is a legacy alias of `join_party`.)
+   `minor` characters get **`request_help`** instead of `give_quest` — same grounding, then
+   railed by `build_simple_quest` so a throwaway NPC can ask a favour but never steer the
+   main line.
    The `main` set also includes **`set_goal`/`resolve_goal`** (the agenda — see
    `npc/agenda.py`) and `tell` — one NPC passes word to others, writing a line into each
    target's memory via `NPCMemory.remember_for` (a live-instance registry keeps that write on
@@ -298,11 +301,18 @@ first, then content, then the ensemble — **stop for a play session after each 
   (`npc/bonds.py`); LLM-facing room `desc`/`features`; character schema v2. The starter quest is
   now just **"find the lamplighter's apprentice"** (`talk_to wren`, a leaf with no breadcrumb) —
   the lamp quest and the oil both come out of Wren's agenda, verified live. `SAVE_VERSION = 4`.
-- **Phase B (next)** — content: ~10 new rooms in two districts with earned loops, knowledge-lock
-  puzzles, four `minor` NPCs with simple backgrounds and a **railed** `request_help` quest action
-  (`fetch`/`deliver`/`talk_to`, count 1, no follow-ups, one open request each, rewards out of
-  their own pockets), the **Ansel chain** (staff → lantern → last note), and the remaining
-  characters given the schema-v2 treatment with 3-4 beat arcs.
+- **Phase B (done)** — content. The map is **20 rooms**: town gains the Lamplighters' Store,
+  the Lamp Chapel + Undercroft, the Well Yard, the Farm Track and the Outfarm; the ridge gains
+  the Shelf, the Cairn, the Wind Shrine and the Hollow. The **knowledge lock** is the
+  undercroft's sigil door (`Door.requires_flag`), opened by reading the rite book
+  (`items.READ_FLAGS`) *or* by any character explaining it (`actions.FACT_FLAGS`) — two routes,
+  so no refusal seals it — and opening it links the undercroft to the tavern cellar as an
+  earned loop. The Ridge Shelf drops one-way to the camp. The **Ansel chain** is placed: staff
+  (ridge foot) → lantern (wind shrine niche) → last note (undercroft cache). Four `minor` NPCs
+  (Hessa, Moss, Tilda, Corvin) with a **railed** `request_help` (`build_simple_quest`:
+  `fetch`/`deliver`/`talk_to` only, count 1, no follow-ups, one open request each, item rewards
+  paid out of their own pack). Bram/Sella/Perrin/the Gloam given the schema-v2 treatment with
+  3-4 beat arcs. `vendor` gained the agenda actions, since Sella has an arc too.
 - **Phase C (partly done, rest planned)** — the ensemble. **Done early, from play feedback:**
   overworld interjections (`npc/interject.py`, the rule half of the hybrid filter) and
   bystanders remembering conversations they stood in. **Still planned:** the `invoke_others`

@@ -126,7 +126,10 @@ ACTION_SETS: dict[str, list[str]] = {
     "main": ["adjust_affinity", "give_quest", "complete_quest", "offer_item", "reveal_fact",
              "use_item", "set_goal", "resolve_goal", "tell", "move_to", "join_party",
              "leave_party", "attack", "end_dialogue"],
-    "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "end_dialogue"],
+    # A vendor is still a person with a plan — Sella has an arc — so she gets the
+    # agenda actions, but not quest-giving or companionship.
+    "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item",
+               "set_goal", "resolve_goal", "tell", "end_dialogue"],
     "minor": ["adjust_affinity", "reveal_fact", "use_item", "request_help", "tell",
               "end_dialogue"],
 }
