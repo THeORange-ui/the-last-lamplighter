@@ -9,6 +9,11 @@ Objective types (target must resolve to a known entity):
     fetch     target=item_id                   — hold N of an item
     deliver   target=item_id  npc=npc_id       — give an item to an NPC
     talk_to   target=npc_id                     — speak with an NPC
+    judged    target=<free-text criterion>      — no mechanical test exists; the giver
+              decides. Some things worth asking for ("set my mind at rest about Ansel")
+              are satisfied by what was said and felt, not by a counter. Progress only
+              moves when the giver uses the `complete_quest` action, so this type can
+              never auto-complete — and the giver is the only one who may close it.
 
 Reward types:
     item      value=item_id
@@ -19,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-OBJECTIVE_TYPES = {"reach", "interact", "fetch", "deliver", "talk_to"}
+OBJECTIVE_TYPES = {"reach", "interact", "fetch", "deliver", "talk_to", "judged"}
 REWARD_TYPES = {"item", "affinity", "info"}
 
 # Objective type for the breadcrumb that sends the player back to a quest-giver so
@@ -122,6 +127,13 @@ def build_quest(data: dict, giver: str, known: "KnownEntities",
     if otype == "deliver":
         if not npc or npc not in known.npcs:
             raise QuestValidationError(f"deliver npc {npc!r} is not an NPC")
+    if otype == "judged":
+        # Nothing to ground against the world: the criterion is prose and the giver is
+        # the judge. It still has to SAY something, or nobody can tell what was asked.
+        if not target:
+            raise QuestValidationError("judged quest needs a criterion as its target")
+        # Count is forced to 1 — "satisfy me twice" isn't a thing.
+        count = 1
 
     # Reward (optional; default a small affinity bump).
     rdata = data.get("reward") or {"type": "affinity", "value": "10"}
@@ -176,6 +188,9 @@ def evaluate_progress(quest: Quest, state) -> int:
     if o.type == "talk_to":
         npc = state.npcs.get(o.target)
         return o.count if npc and npc.talked_to else 0
+    if o.type == "judged":
+        # Never satisfied by world state — only the giver's own `complete_quest` moves it.
+        return quest.progress
     return 0
 
 

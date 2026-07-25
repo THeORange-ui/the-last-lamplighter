@@ -27,14 +27,26 @@ ACTIONS: dict[str, str] = {
     "give_quest": (
         '- {"type": "give_quest", "quest": {\n'
         '       "title": "<short>", "description": "<one sentence>",\n'
-        '       "objective": {"type": "reach|interact|fetch|deliver|talk_to",\n'
+        '       "objective": {"type": "reach|interact|fetch|deliver|talk_to|judged",\n'
         '                     "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}\n'
-        "    Offer a task. The target MUST be a real entity listed in the world briefing."
+        "    Offer a task. The target MUST be a real entity listed in the world briefing —\n"
+        "    EXCEPT for \"judged\", where the target is instead a short plain-English\n"
+        "    description of what would satisfy you. Use \"judged\" when what you want can't\n"
+        "    be counted or stood on (\"put my mind at rest about Ansel\"): nothing in the\n"
+        "    world can decide it, so YOU decide, later, with complete_quest."
+    ),
+    "complete_quest": (
+        '- {"type": "complete_quest", "quest_id": "<id of a quest YOU gave>", "because": "<why>"}\n'
+        "    Declare a quest you gave the player finished, because you judge it so. This is\n"
+        "    how a \"judged\" quest ends — when what you actually needed has happened, say so\n"
+        "    and close it. You can only close your own quests, and only once."
     ),
     "offer_item": (
-        '- {"type": "offer_item", "item": "<item id you are CARRYING>"}\n'
-        "    Hand the player one item from your own inventory (listed in the briefing).\n"
+        '- {"type": "offer_item", "item": "<item id you are CARRYING>", "count": <int, default 1>}\n'
+        "    Hand the player items from your own inventory (listed in the briefing).\n"
+        "    Give the whole number they need in ONE action — if they need three flasks and\n"
+        "    you have three, set count to 3. Don't make them ask three times.\n"
         "    You cannot give what you do not carry."
     ),
     "reveal_fact": (
@@ -94,9 +106,9 @@ ACTIONS: dict[str, str] = {
 # (quests, companionship, the works); a `vendor` mostly trades; a `minor` throwaway
 # NPC can only colour a scene and share a fact.
 ACTION_SETS: dict[str, list[str]] = {
-    "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact", "use_item",
-             "set_goal", "resolve_goal", "tell", "move_to", "join_party", "leave_party",
-             "attack", "end_dialogue"],
+    "main": ["adjust_affinity", "give_quest", "complete_quest", "offer_item", "reveal_fact",
+             "use_item", "set_goal", "resolve_goal", "tell", "move_to", "join_party",
+             "leave_party", "attack", "end_dialogue"],
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "end_dialogue"],
     "minor": ["adjust_affinity", "reveal_fact", "use_item", "end_dialogue"],
 }
@@ -124,6 +136,7 @@ def action_catalog(kind: str = "main") -> str:
 
 _AFFINITY_CLAMP = 25
 _MAX_ACTIONS = 6
+_MAX_OFFER = 10          # most of one item an NPC can hand over in a single action
 
 
 @dataclass
@@ -195,6 +208,22 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             state.events.record("quest_start", f"{name} gave you the quest “{quest.title}”.")
             result.effects.append(f"{name} gives you a quest: “{quest.title}”.")
 
+        elif atype == "complete_quest":
+            qid = str(raw.get("quest_id", "")).strip()
+            quest = state.quest_by_id(qid)
+            if quest is None or quest.status != "active":
+                result.debug.append(f"complete_quest for unknown/inactive quest {qid!r}")
+                continue
+            if quest.giver != npc_id:
+                # Only the person who asked gets to say it's been done.
+                result.debug.append(
+                    f"{npc_id} tried to complete {qid!r}, which they did not give")
+                continue
+            # Mark it satisfied; refresh_and_complete (right after this) grants the
+            # reward and opens any follow-ups, exactly as for a mechanical quest.
+            quest.progress = quest.objective.count
+            result.effects.append(f"{name} considers “{quest.title}” settled.")
+
         elif atype == "offer_item":
             item = str(raw.get("item", "")).strip()
             npc_inv = state.npcs[npc_id].inventory
@@ -205,9 +234,18 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 # The NPC can only give what it actually holds — no inventing items.
                 result.debug.append(f"{npc_id} tried to offer {item!r} it doesn't have")
                 continue
-            npc_inv.remove(item)
-            state.player.inventory.append(item)
+            try:
+                count = int(raw.get("count", 1) or 1)
+            except (TypeError, ValueError):
+                count = 1
+            # Hand over as many as asked, capped by what they actually hold.
+            count = max(1, min(count, _MAX_OFFER, npc_inv.count(item)))
+            for _ in range(count):
+                npc_inv.remove(item)
+                state.player.inventory.append(item)
             label = display_name(item)
+            if count > 1:
+                label = f"{label} x{count}"
             # Anyone else in the room sees the handover — and if the object matters to
             # them, they will not forget it (engine/witness.py pins bonded items).
             from engine.witness import BEAT, record_experience

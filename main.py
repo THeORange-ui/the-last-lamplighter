@@ -13,12 +13,14 @@ import pygame
 from engine.combat import combatant_from_npc, enemies_from_ids, make_combat
 from engine.interact import apply_interaction, is_live
 from engine.items import CURRENCY, display_name, use_item
-from engine.quests import refresh_and_complete
+from engine.quests import find_check_back, refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
 from engine.state import GroundItem
 from engine.trade import is_vendor
-from engine.witness import BEAT, MAJOR, NOTE, record_experience
+from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
+                            witnesses)
+from npc.bonds import bond_for
 from engine.world import NPC_SPAWNS
 from engine.world import ensure_world_complete, new_world
 from npc.memory import NPCMemory
@@ -182,6 +184,19 @@ class Game:
                 self.memory_for(q.giver).remember(
                     f'The player completed the quest you gave them: "{q.title}".'
                 )
+        if completed:
+            self._auto_commission()
+
+    def _auto_commission(self):
+        """A 'check back with X' breadcrumb makes no sense when X is walking beside you.
+        They were there; they'd speak up. So open the conversation instead of sending
+        the player off to find someone who never left."""
+        if self.scene != "overworld" or self.dialogue is not None:
+            return
+        for nid in self.world.party:
+            if find_check_back(self.world, nid):
+                self.open_dialogue(nid)
+                return
 
     # --- helpers ----------------------------------------------------------
     def occupied(self, x, y) -> bool:
@@ -416,11 +431,14 @@ class Game:
             p.inventory.append(g.item)
             label = display_name(g.item)
             self.set_toast(f"Picked up: {label}.")
-            # Anyone here sees it — and if it's something they have a bond with
-            # (Ansel's staff, to Wren), the memory is pinned rather than merely kept.
+            # Only a pickup somebody present actually cares about is worth a memory —
+            # otherwise a loaf of bread crowds real conversations out of the 12-entry
+            # prompt window. A bonded object (Ansel's staff, to Wren) also gets pinned.
+            cared = any(bond_for(nid, "item", g.item)
+                        for nid in witnesses(self.world, p.room))
             record_experience(
                 self.world, "item_get", f"You picked up the {label}.",
-                room=p.room, public=False, salience=BEAT,
+                room=p.room, public=False, salience=BEAT if cared else AMBIENT,
                 first_person=f"You watched the player pick up the {label}, "
                              f"right here in {self.rooms[p.room].name}.",
                 bond_items=(g.item,),

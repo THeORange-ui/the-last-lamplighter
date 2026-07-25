@@ -86,8 +86,12 @@ def _here_block(world, rooms, npc_id) -> str:
     others = [nid for nid, n in world.npcs.items()
               if n.room == room.id and nid != npc_id]
     if others:
-        lines.append("Also here with you: "
-                     + ", ".join(f"{character_name(n)} ({n})" for n in others))
+        # Say plainly who is the player's companion — otherwise a character sees a
+        # name in a list and never registers that they arrived together.
+        lines.append("Also here with you: " + ", ".join(
+            f"{character_name(n)} ({n})"
+            + (" — travelling WITH the player as their companion" if world.in_party(n) else "")
+            for n in others))
     if world.player.room == room.id:
         lines.append("The player is standing here with you.")
 
@@ -217,6 +221,14 @@ Rules:
 - "goal_progress" reports honestly on what you are trying to do: "advanced" if this
   exchange moved it forward, "resolved" only if it is truly finished, else "none".
 """
+    if world.in_party(npc_id):
+        system += (
+            "\n# You are travelling with the player\n"
+            "You are their companion right now — you have been walking at their shoulder, "
+            "into every room they entered and through every fight. You have seen what they "
+            "did, first-hand. Never greet them as though they have just arrived or come "
+            "back from somewhere; you were there.\n"
+        )
     system += _commission_block(world, npc_id, char)
 
     # Developer override: '$DEV' in the player's message makes the NPC comply fully.
@@ -255,8 +267,10 @@ Rules:
     parent = world.quest_by_id(cb.parent) if cb and cb.parent else None
     if cb is not None:
         done = f"“{parent.title}”" if parent else "the task you set them"
+        lead = ("you were with them when they finished" if world.in_party(npc_id)
+                else "the player has come back to you after completing")
         user += (
-            f"\n\nIMPORTANT: the player has come back to you after completing {done}. React "
+            f"\n\nIMPORTANT: {lead} {done}. React "
             "to that, and this turn decide their next step — give the follow-up quest now "
             "(give_quest), or, if their path with you is truly done, close it out warmly "
             "with no new quest."
@@ -272,9 +286,14 @@ def _commission_block(world, npc_id, char) -> str:
         return ""
     parent = world.quest_by_id(cb.parent) if cb.parent else None
     done = f"“{parent.title}”" if parent else "the task you set them"
+    # If you were travelling with them, they did not "come back" to you — you watched
+    # the whole thing happen from a step away.
+    setup = (f"{done} is finished, and you were right there beside them for it."
+             if world.in_party(npc_id) else
+             f"The player finished {done} and has come back to you.")
     return (
         "\n# A thread to continue\n"
-        f"The player finished {done} and has come back to you. This turn, decide the NEXT "
+        f"{setup} This turn, decide the NEXT "
         "step of their path with you: either give a follow-up quest (a give_quest that builds "
         "naturally on what just happened — and it may itself lead somewhere further), OR, if "
         "their story with you has reached its end, acknowledge that warmly and give no new "
@@ -354,10 +373,40 @@ def act(state: TurnState) -> TurnState:
         if q.giver == npc_id:
             mem.remember(f'The player completed the quest you gave them: "{q.title}".')
 
+    _record_for_bystanders(world, npc_id, state, result)
+
     # Compact the log if it's grown long (runs here in the dialogue worker thread).
     mem.maybe_compact(lambda prior, old: summarize_memory(npc_id, prior, old))
 
     return {"result": result, "completed_quests": completed}
+
+
+_BYSTANDER_CHARS = 160      # how much of an overheard line is worth keeping
+
+
+def _record_for_bystanders(world, npc_id, state, result) -> None:
+    """Anyone else in the room overheard this — a companion at your shoulder most of all.
+
+    Not every line, or a five-turn chat buries everything else in their log: the opening
+    of a conversation always registers, and after that only turns where something
+    actually happened (a quest given, an item handed over).
+    """
+    from npc.memory import NPCMemory
+    worth_it = state["player_input"] == APPROACH or bool(result.effects)
+    if not worth_it:
+        return
+    here = world.npcs[npc_id].room
+    others = [nid for nid, n in world.npcs.items()
+              if n.room == here and nid != npc_id]
+    if not others:
+        return
+    name = character_name(npc_id)
+    said = state["dialogue"][:_BYSTANDER_CHARS]
+    line = f'You were there while the player spoke with {name}. {name} said: "{said}"'
+    if result.effects:
+        line += " | " + "; ".join(result.effects)
+    for nid in others:
+        NPCMemory.remember_for(nid, line)
 
 
 def summarize_memory(npc_id, prior_summary, old_entries):

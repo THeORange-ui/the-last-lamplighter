@@ -160,9 +160,15 @@ def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
 def _ally_state_block(combat: Combat, ally: Combatant) -> str:
     p = combat.player()
     foes = combat.enemies()
+    # Say outright which foes have a mind to reach: a companion who doesn't know keeps
+    # earnestly reasoning with a gloamling, which has no words to reason with.
     foe_lines = "; ".join(
-        f"{e.name} (id={e.id}, hp {e.hp}/{e.max_hp}, resolve {e.resolve}"
-        + (", willing to stop" if e.spareable else "") + ")"
+        f"{e.name} (id={e.id}, hp {e.hp}/{e.max_hp}"
+        + (f", resolve {e.resolve}" if e.persona else "")
+        + (", willing to stop" if e.spareable else "")
+        + ("" if e.persona else " — MINDLESS: a dumb creature of the dark. It has no "
+                               "words and cannot be reasoned with, pitied, or talked down")
+        + ")"
         for e in foes
     ) or "no foe still stands"
     return (
@@ -187,7 +193,9 @@ def ally_turn(combat: Combat, ally: Combatant, world=None) -> str:
         'empty>", "action": "attack" | "defend" | "speak" | "spare", '
         '"target": "<foe id for attack/spare; omit otherwise>"}. '
         "attack = strike a foe. defend = brace against the next blow. speak = only talk this "
-        "turn (gentle or understanding words to a FOE can wear down their will to fight). "
+        "turn (gentle or understanding words to a FOE can wear down their will to fight — but "
+        "only a foe that HAS a mind; talking at something marked MINDLESS just wastes your "
+        "turn while it bites you). "
         "spare = stay your hand toward a foe already willing to stop. Act the way THIS "
         "character would — some rush in, some hang back, some would rather reach out."
     )
