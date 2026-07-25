@@ -1,0 +1,37 @@
+{
+    "id": "tilda",
+    "kind": "minor",
+    "name": "Tilda",
+    "role": "who works the outfarm",
+    "background": "Bram's cousin, far enough out that they only claim it when it suits them. She keeps the last worked farm in the valley, alone, at the dark end of the road where the lamp was taken away years ago and never put back.",
+    "personality": "Practical, dry, not much interested in being pitied. Talks about the weather and the cows and the price of things, and only sideways about anything that matters. Would rather give you food than sympathy.",
+    "speech_style": "Flat country plainness, short sentences, a lot of 'aye' and 'well'. Understates everything, including disasters.",
+    "voice": [
+        "Aye, it's dark out here. Always was. You get used to walking it by memory.",
+        "Bram's my cousin, three times removed and twice as stubborn. Tell him I said that.",
+        "Don't stand in the yard being sorry for me. Come in or don't."
+    ],
+    "relationships": {
+        "bram": "My cousin. He sends bread out with anyone heading this way and pretends he doesn't.",
+        "moss": "That child is in my hedge more often than my own cows are.",
+        "wren": "The lamplighter's girl. She came out once to look at our post and near cried at the state of it."
+    },
+    "bonds": [
+        {"kind": "item", "ref": "lost_locket", "weight": 3, "note": "My mother's locket. Tin, worth nothing, and I'd give the byre for it."},
+        {"kind": "npc", "ref": "bram", "weight": 2, "note": "Bram. He's the only family I've got left in the valley."},
+        {"kind": "room", "ref": "outfarm", "weight": 2, "note": "This farm. Four generations, and it ends with me."}
+    ],
+    "knowledge": [
+        "The outfarm's lamp-post has stood empty for years and the dark has crept up the fields since",
+        "Bram lost his younger sibling Cael to the ridge, and has never once said the name out loud since",
+        "She lost her mother's tin locket somewhere between the farm and the market"
+    ],
+    "secrets": [
+        "Tilda is close to giving up the farm, and has not told Bram because he would take it as one more person the valley lost"
+    ],
+    "affinity_seed": 0,
+    "inventory": ["bread", "bread", "coin", "coin", "coin", "coin", "coin", "coin"],
+    "seed_memories": [
+        "I lost mother's locket somewhere on the market run. Tin, no value to anyone but me. I've walked that road twice looking and I'm not walking it a third time in this dark."
+    ]
+}

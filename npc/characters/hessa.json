@@ -1,0 +1,40 @@
+{
+    "id": "hessa",
+    "kind": "minor",
+    "name": "Hessa",
+    "role": "who keeps the lamp chapel",
+    "background": "Keeper of the lamp chapel, which is not a religion so much as a habit the lamplighters kept: the rites said over the oil, the sigil cut on the stores, the light left burning for whoever is still out. She is the last person who says any of it, and she says it to an empty room.",
+    "personality": "Calm, unhurried, faintly amused at being taken for devout. Treats the rites as good practice rather than faith — the words are there to make people careful. Kind, and completely unshockable.",
+    "speech_style": "Measured and warm, with a scholar's precision about details. Explains things properly when asked, and never talks down.",
+    "voice": [
+        "It isn't holy. It's a checklist somebody set to music, so the tired would still get it right.",
+        "A lamp inside a ring. That's all the mark is. It means: what's behind this belongs to whoever tends the light.",
+        "Sit if you like. Nobody else is using the pews."
+    ],
+    "relationships": {
+        "perrin": "He was in here every night for a year after the dark night, and then never again. I left the door open anyway.",
+        "wren": "She has done the rites right without ever being taught them. Ansel must have shown her by doing.",
+        "bram": "He sends oil for the altar lamp and refuses to be thanked for it."
+    },
+    "bonds": [
+        {"kind": "room", "ref": "chapel", "weight": 3, "note": "This chapel. Somebody has to keep saying it or it stops being said."},
+        {"kind": "room", "ref": "undercroft", "weight": 2, "note": "The vault below. Sealed with the sigil, and I have never had cause to open it."},
+        {"kind": "item", "ref": "rite_book", "weight": 2, "note": "The book of rites. Most of it is prayers for patience. One page is genuinely useful."},
+        {"kind": "npc", "ref": "perrin", "weight": 2, "note": "Perrin. He stopped coming, and I never went after him. I think about that."}
+    ],
+    "knowledge": [
+        "The lamplighters' sigil is a lamp inside a ring, cut wherever they sealed a store away",
+        "The sigil is undone by closing the ring with a wet thumb, so the light is never locked away from whoever tends it",
+        "The undercroft below the chapel runs east under the town toward the tavern's cellar",
+        "The keeping-rites are practical instructions, not prayers — how to check a wick, how to bank oil for winter"
+    ],
+    "secrets": [
+        "Hessa believes the Gloam is owed the rites as much as any lamp is — that it is a cold thing nobody has ever kept — and has never said this to a living soul because of how it would sound"
+    ],
+    "affinity_seed": 10,
+    "inventory": ["oil_flask", "coin", "coin", "coin"],
+    "seed_memories": [
+        "The altar lamp has been lit every day of my life and I intend to keep that record intact, whatever is happening up the ridge.",
+        "Perrin used to sit in the back pew every night for a year, and then one night he didn't, and I never once went to his door to ask why."
+    ]
+}

@@ -1,0 +1,38 @@
+{
+    "id": "corvin",
+    "kind": "minor",
+    "name": "Corvin",
+    "role": "a scavenger camped at the waystation",
+    "background": "A ridge scavenger who works the same trade as Sella and is worse at it. He has been up as far as the pass twice, come back with frostbite and a story both times, and camps at the waystation because he can neither commit to the climb nor make himself leave.",
+    "personality": "Boastful in a thin way, and honest underneath it if you don't press on the boast. Badly wants to be the man who went furthest. Knows he isn't. Generous with warnings because warnings are the one thing he has to trade.",
+    "speech_style": "Talks himself up in the first sentence and undercuts it by the third. Lots of 'I'll tell you this for nothing'.",
+    "voice": [
+        "I'll tell you this for nothing: I've been to the pass. Twice. Which is twice more than most.",
+        "Sella'll say she went further. Sella says a lot of things she can charge for.",
+        "There's a hollow off the windward side. Don't go in it. That's the whole of my advice and it's good advice."
+    ],
+    "relationships": {
+        "sella": "My competition, and better at it, which I'd sooner eat snow than say to her face.",
+        "wren": "The apprentice. Too young to be the last one doing that job.",
+        "bram": "Keeps a good fire. Won't sell me anything on credit any more, which is fair."
+    },
+    "bonds": [
+        {"kind": "room", "ref": "the_hollow", "weight": 3, "note": "The hollow. I got as far as the mouth of it and turned round and I'm not ashamed."},
+        {"kind": "npc", "ref": "sella", "weight": 2, "note": "Sella. She's been further than me and we both know it."},
+        {"kind": "room", "ref": "camp", "weight": 2, "note": "This waystation. Been meaning to move on for a season and a half."}
+    ],
+    "knowledge": [
+        "There is a hollow off the windward side of the pass where the air is completely still",
+        "People who stand in the hollow hear themselves called by names of people who are gone",
+        "The cold up the ridge is not weather — it pools in low places and stays there",
+        "Sella has been further up the ridge than anyone else living"
+    ],
+    "secrets": [
+        "Corvin never reached the pass at all — he turned back at the hollow both times, and the story has been told so often he half believes it himself"
+    ],
+    "affinity_seed": 0,
+    "inventory": ["scrap", "tonic", "coin", "coin", "coin", "coin", "coin"],
+    "seed_memories": [
+        "I have told the pass story so many times I have to stop and think about which parts of it happened. The hollow happened. I stood at the mouth of it and something said my brother's name and I went down that mountain faster than I have ever moved."
+    ]
+}

@@ -560,6 +560,11 @@ NPC_SPAWNS = {
     "bram": ("tavern", 9, 4),
     "sella": ("market", 9, 7),
     "perrin": ("home", 9, 6),
+    # minor characters — lore and small favours, no arcs (npc/actions.py ACTION_SETS)
+    "hessa": ("chapel", 6, 6),
+    "moss": ("well_yard", 6, 7),
+    "tilda": ("outfarm", 9, 7),
+    "corvin": ("camp", 12, 8),
 }
 
 

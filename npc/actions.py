@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from engine.items import display_name
-from engine.quests import QuestValidationError, build_quest, find_check_back
+from engine.quests import (QuestValidationError, build_quest, build_simple_quest,
+                           find_check_back, open_request_from)
 from engine.world import GRID_H, GRID_W, RIDGE_ROOMS, Room
 from npc.roster import character_name
 
@@ -35,6 +36,17 @@ ACTIONS: dict[str, str] = {
         "    description of what would satisfy you. Use \"judged\" when what you want can't\n"
         "    be counted or stood on (\"put my mind at rest about Ansel\"): nothing in the\n"
         "    world can decide it, so YOU decide, later, with complete_quest."
+    ),
+    "request_help": (
+        '- {"type": "request_help", "quest": {\n'
+        '       "title": "<short>", "description": "<one sentence>",\n'
+        '       "objective": {"type": "fetch|deliver|talk_to", "target": "<item or npc id>",\n'
+        '                     "npc": "<id, deliver only>"},\n'
+        '       "reward": {"type": "item|affinity|info", "value": "<item you CARRY / int / fact>"}}}\n'
+        "    Ask the player for one small favour — something you have lost, something that\n"
+        "    needs taking to someone, someone you need spoken to. Keep it small and real to\n"
+        "    your own life; you are not sending anyone up the mountain. You may only have\n"
+        "    ONE favour outstanding, and if you pay in goods it comes out of your own pocket."
     ),
     "complete_quest": (
         '- {"type": "complete_quest", "quest_id": "<id of a quest YOU gave>", "because": "<why>"}\n'
@@ -115,7 +127,8 @@ ACTION_SETS: dict[str, list[str]] = {
              "use_item", "set_goal", "resolve_goal", "tell", "move_to", "join_party",
              "leave_party", "attack", "end_dialogue"],
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "end_dialogue"],
-    "minor": ["adjust_affinity", "reveal_fact", "use_item", "end_dialogue"],
+    "minor": ["adjust_affinity", "reveal_fact", "use_item", "request_help", "tell",
+              "end_dialogue"],
 }
 
 # Legacy action aliases → their current name (kept so older prompts/saves still work).
@@ -217,6 +230,27 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             state.quests.append(quest)
             state.events.record("quest_start", f"{name} gave you the quest “{quest.title}”.")
             result.effects.append(f"{name} gives you a quest: “{quest.title}”.")
+
+        elif atype == "request_help":
+            if not isinstance(raw.get("quest"), dict):
+                result.debug.append("request_help without quest body")
+                continue
+            if open_request_from(state, npc_id) is not None:
+                # One favour at a time — a minor character with three open errands
+                # stops being a person and becomes a quest board.
+                result.debug.append(f"{npc_id} already has a favour outstanding")
+                continue
+            try:
+                quest = build_simple_quest(raw["quest"], giver=npc_id, known=known,
+                                           inventory=state.npcs[npc_id].inventory)
+            except QuestValidationError as e:
+                result.debug.append(f"dropped request: {e}")
+                continue
+            if state.has_quest(quest.id):
+                continue
+            state.quests.append(quest)
+            state.events.record("quest_start", f"{name} asked you for help: “{quest.title}”.")
+            result.effects.append(f"{name} asks a favour of you: “{quest.title}”.")
 
         elif atype == "complete_quest":
             qid = str(raw.get("quest_id", "")).strip()

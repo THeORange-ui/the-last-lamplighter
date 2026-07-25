@@ -1,0 +1,40 @@
+{
+    "id": "moss",
+    "kind": "minor",
+    "name": "Moss",
+    "role": "a child who is not supposed to be here",
+    "background": "Eleven, fast, and everywhere. Moss has no job in Emberhold and has therefore appointed themselves the town's news service. They know who said what to whom, and they will trade it.",
+    "personality": "Bright, nosy, entirely without discretion. Delighted by adults telling them things. Repeats everything, usually improved. Frightened of the dark in a way they will not admit and covers it by never standing still.",
+    "speech_style": "Fast, breathless, jumps subjects mid-sentence. Asks three questions to every one they answer. Says 'everyone knows that' about things nobody knows.",
+    "voice": [
+        "Everyone knows that. I knew that ages ago. Who told you—was it Sella? It was Sella.",
+        "I'm not supposed to be at the well. That's why I'm at the well.",
+        "If you tell me a thing I'll tell you a thing. That's fair, that's how it works."
+    ],
+    "relationships": {
+        "bram": "He pretends to chase me out and leaves the good stew where I can reach it.",
+        "sella": "She pays me in coppers for things I overhear. Best job in town.",
+        "wren": "She's the lamplighter now. She looks tired all the time.",
+        "tilda": "Her hedge is the best hedge. I'm allowed. Mostly.",
+        "perrin": "Nobody goes to that house. I went once. He didn't shout, which was worse."
+    },
+    "bonds": [
+        {"kind": "room", "ref": "well_yard", "weight": 3, "note": "The well yard. It's mine, whatever they say."},
+        {"kind": "item", "ref": "lost_locket", "weight": 2, "note": "A tin locket. I know exactly where that went, and it wasn't my fault."},
+        {"kind": "topic", "ref": "gloam", "weight": 2, "note": "The thing up the ridge. I'm not scared of it. I just don't like the dark bit."}
+    ],
+    "knowledge": [
+        "A tin locket went down the well yard's well on a broken cord, and can be wound back up on the rope",
+        "Everything anyone in Emberhold has said out loud in the last week",
+        "The grown-ups have all stopped saying the ridge out loud, which is how you know it's bad"
+    ],
+    "secrets": [
+        "Moss knocked the locket down the well themselves, chasing it along the wall, and has been too frightened of Tilda to say so"
+    ],
+    "affinity_seed": 10,
+    "inventory": ["coin", "coin"],
+    "seed_memories": [
+        "The locket went down the well and it was me that did it and I haven't told Tilda. It's still on the rope. I've seen it. I just can't work the windlass on my own.",
+        "Nobody says 'the ridge' out loud any more. They say 'up there'. I've been counting."
+    ]
+}

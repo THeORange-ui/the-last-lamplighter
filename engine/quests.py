@@ -157,6 +157,44 @@ def build_quest(data: dict, giver: str, known: "KnownEntities",
     )
 
 
+# What a `minor` character is allowed to ask for. No `reach` or `interact`: those are
+# progression-shaped, and a throwaway NPC should never be steering the main line.
+MINOR_OBJECTIVES = {"fetch", "deliver", "talk_to"}
+
+
+def build_simple_quest(data: dict, giver: str, known: "KnownEntities",
+                       inventory=()) -> Quest:
+    """A minor character's small ask, railed hard.
+
+    Same grounding as build_quest, then: one of three shapes, count forced to 1, no
+    follow-ups (minor characters don't run arcs), and a reward they can actually pay —
+    an item reward has to be something in their own pocket, or it falls back to warmth.
+    """
+    obj = dict(data.get("objective") or {})
+    otype = str(obj.get("type", "")).strip()
+    if otype not in MINOR_OBJECTIVES:
+        raise QuestValidationError(
+            f"{otype!r} is not something a minor character may ask for")
+    obj["count"] = 1
+
+    reward = dict(data.get("reward") or {})
+    if reward.get("type") == "item" and str(reward.get("value", "")) not in inventory:
+        reward = {"type": "affinity", "value": "8"}
+
+    payload = dict(data)
+    payload["objective"] = obj
+    payload["reward"] = reward or {"type": "affinity", "value": "8"}
+    payload["followups"] = []
+    quest = build_quest(payload, giver=giver, known=known)
+    quest.followups = []
+    return quest
+
+
+def open_request_from(state, giver: str) -> "Quest | None":
+    """The one open ask a minor character is allowed to have running."""
+    return next((q for q in state.active_quests() if q.giver == giver), None)
+
+
 def _slug(text: str) -> str:
     keep = [c.lower() if c.isalnum() else "_" for c in text]
     slug = "".join(keep).strip("_")
@@ -272,6 +310,11 @@ def _activate_followups(quest: Quest, state, known) -> None:
 def _grant_reward(quest: Quest, state) -> None:
     r = quest.reward
     if r.type == "item":
+        # Pay out of their own pocket where they have it, so a reward is a real
+        # transfer rather than an item conjured into being.
+        giver = state.npcs.get(quest.giver)
+        if giver is not None and r.value in giver.inventory:
+            giver.inventory.remove(r.value)
         state.player.inventory.append(r.value)
     elif r.type == "affinity":
         try:
