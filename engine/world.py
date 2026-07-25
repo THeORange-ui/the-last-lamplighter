@@ -319,7 +319,9 @@ def starter_quest() -> Quest:
         id="find_the_apprentice",
         title="Find the lamplighter's apprentice",
         description="Somebody still tends the lamps in Emberhold. Find them.",
-        giver="wren",
+        # Deliberately no giver: nobody handed this to you, so Wren must not end up
+        # remembering that she "gave you the quest" to come and find her.
+        giver="",
         objective=Objective(type="talk_to", target="wren", count=1),
         reward=Reward(type="affinity", value="0"),
         followups=[],

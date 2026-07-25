@@ -197,7 +197,10 @@ def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
             record_experience(
                 state, "quest_complete", f"Completed the quest “{q.title}”.",
                 room=state.player.room, salience=BEAT,
-                first_person=f'You were there when the player finished "{q.title}".')
+                first_person=f'You were there when the player finished "{q.title}".',
+                # The giver gets their own, better-put line (npc/agent.py act, and
+                # main.on_quests_completed) — don't hand them a second copy.
+                exclude=(q.giver,))
             _activate_followups(q, state, known)
             just_done.append(q)
             if on_complete:
