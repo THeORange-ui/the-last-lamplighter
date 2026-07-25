@@ -18,6 +18,8 @@ class Event:
     kind: str
     text: str
     public: bool = True     # public events are visible to NPCs via their briefing
+    room: str | None = None  # where it happened — who was present to witness it
+    salience: int = 1        # how much it's worth remembering (see engine/witness.py)
 
 
 @dataclass
@@ -25,9 +27,11 @@ class EventLog:
     events: list[Event] = field(default_factory=list)
     _seq: int = 0
 
-    def record(self, kind: str, text: str, *, public: bool = True) -> Event:
+    def record(self, kind: str, text: str, *, public: bool = True,
+               room: str | None = None, salience: int = 1) -> Event:
         self._seq += 1
-        ev = Event(seq=self._seq, kind=kind, text=text.strip(), public=public)
+        ev = Event(seq=self._seq, kind=kind, text=text.strip(), public=public,
+                   room=room, salience=salience)
         self.events.append(ev)
         return ev
 

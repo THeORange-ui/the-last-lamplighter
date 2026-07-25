@@ -59,15 +59,59 @@ class TurnState(TypedDict, total=False):
     goal_progress: str
 
 
-def _world_briefing(world, rooms, known, npc_id) -> str:
+def _here_block(world, rooms, npc_id) -> str:
+    """The room this character is actually standing in, described properly.
+
+    Only the current room gets this treatment — every other room stays a bare
+    id/name further down, so the prompt doesn't balloon as the map grows.
+    """
     npc = world.npcs[npc_id]
     room = rooms[npc.room]
+    lines = [f"Where you are: {room.name} (id: {room.id})"]
+    if room.desc:
+        lines.append(room.desc)
+    if room.features:
+        lines.append("Around you: " + "; ".join(room.features))
+
+    things = [i for i in room.interactables if not i.hidden]
+    if things:
+        lines.append("Things here you could point at or use: "
+                     + "; ".join(f"{i.label} — {i.desc}" for i in things))
+
+    ground = world.ground_items_in(room.id)
+    if ground:
+        lines.append("Lying on the ground here: "
+                     + ", ".join(display_name(g.item) for g in ground))
+
+    others = [nid for nid, n in world.npcs.items()
+              if n.room == room.id and nid != npc_id]
+    if others:
+        lines.append("Also here with you: "
+                     + ", ".join(f"{character_name(n)} ({n})" for n in others))
+    if world.player.room == room.id:
+        lines.append("The player is standing here with you.")
+
+    # What's present that this character has an attachment to, in their own words.
+    from npc.bonds import notes_here
+    notes = notes_here(npc_id, room=room.id,
+                       items=set(world.player.inventory) | {g.item for g in ground},
+                       npcs=set(others))
+    if notes:
+        lines.append("Things here that matter to you:\n"
+                     + "\n".join(f"- {n}" for n in notes))
+    return "\n".join(lines)
+
+
+def _world_briefing(world, rooms, known, npc_id) -> str:
+    npc = world.npcs[npc_id]
     lit = world.lit_lamp_count()
     total = len(world.lamps)
 
     lines = [
         f"Setting: {SETTING}",
-        f"You are currently in: {room.name} (id: {room.id}).",
+        "",
+        _here_block(world, rooms, npc_id),
+        "",
         f"Hearthlight strength: {world.hearthlight}/100. Lamps lit: {lit}/{total}.",
         "",
         "Rooms you could refer to or walk to (use the id): "
@@ -91,7 +135,10 @@ def _world_briefing(world, rooms, known, npc_id) -> str:
         lines.append("Facts already revealed in play: " + " | ".join(world.world_facts))
     happenings = world.events.public_briefing()
     if happenings:
-        lines.append("Recent happenings around town (you are aware of these):\n" + happenings)
+        # Rumor, not experience: what you personally witnessed is in your memory
+        # above, in the first person. This is only what word has reached you.
+        lines.append("Word going around town — you know of these, but you were not "
+                     "necessarily there:\n" + happenings)
     return "\n".join(lines)
 
 

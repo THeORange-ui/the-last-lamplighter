@@ -1,11 +1,16 @@
-"""The world map for Emberhold (M1): three small rooms.
+"""The world map for Emberhold: a linear main line town -> ridge, plus two forks.
 
-A room is a tile grid. The border is wall except for door tiles that lead to
-other rooms. Lamps and the Hearthlight are objects; NPC positions live in
-WorldState at runtime (seeded from character files).
+A room is a tile grid. The border is wall except for door tiles that lead to other
+rooms. Everything usable in a room is an `Interactable` (engine/interact.py); the
+Hearthlight is scenery; NPC positions live in WorldState at runtime, seeded from
+NPC_SPAWNS.
 
-This module also owns the ONE authored quest (relight three lamps) and the set
-of KnownEntities that all emergent quests/actions are validated against.
+Each room also carries an LLM-facing `desc` and `features`, so a character standing
+in a place can actually talk about it — only the room they are in gets described in
+their briefing, which keeps the prompt small.
+
+This module owns the one authored quest (go find Wren — everything after it emerges)
+and the KnownEntities set that all emergent quests/actions are validated against.
 """
 from __future__ import annotations
 
@@ -41,6 +46,10 @@ class Room:
     obstacles: set[tuple[int, int]] = field(default_factory=set)
     hearthlight: tuple[int, int] | None = None
     biome: str = "town"          # "town" | "snow" | "camp" — drives the room's palette
+    # LLM-facing: what this place is like, and scenery a character can refer to.
+    # Only the room someone is actually standing in gets described in their briefing.
+    desc: str = ""
+    features: list[str] = field(default_factory=list)
 
     def blocked(self) -> set[tuple[int, int]]:
         """Static blocked tiles: border walls (minus doors) + obstacles + solid
@@ -86,6 +95,8 @@ def street_lamp(lamp_id: str, pos: tuple[int, int]) -> Interactable:
                   "item_msg": "The lamp is dry. You need oil — perhaps Wren has some."},
         effects=[{"light_lamp": True}],
         use_msg="You pour the oil and coax the lamp back to light.",
+        witness_msg="You watched the player pour oil into a dead lamp here and bring "
+                    "it back to light.",
         blocks=False,          # you can walk over a lamp tile
     )
 
@@ -100,6 +111,11 @@ def build_rooms() -> dict[str, Room]:
     square = Room(
         id="square",
         name="Town Square",
+        desc="The heart of Emberhold. The great Hearthlight stands at the centre of it, and "
+             "the whole town is laid out facing the lantern. The cobbles are worn pale in "
+             "a ring where people used to gather close to be warm.",
+        features=["the Hearthlight, the great lantern at the centre", "cobbles worn pale in a ring",
+                  "shuttered houses facing inward"],
         hearthlight=(9, 6),
         interactables=[street_lamp("lamp_square", (4, 3))],
         doors=[Door(x=R, y=MIDY, to_room="tavern", spawn=(1, MIDY))],
@@ -107,6 +123,10 @@ def build_rooms() -> dict[str, Room]:
     tavern = Room(
         id="tavern",
         name="The Ember Tavern",
+        desc="The Ember Tavern: low-ceilinged, smoke-stained, and the last room in town that "
+             "is reliably warm. A long bar counter runs down one side. People come here "
+             "mostly so as not to be alone.",
+        features=["the long bar counter", "a hearth kept deliberately fed", "stools nobody sits on now"],
         interactables=[street_lamp("lamp_tavern", (14, 9))],
         obstacles={(3, 3), (4, 3), (5, 3)},       # the bar counter
         doors=[
@@ -118,12 +138,18 @@ def build_rooms() -> dict[str, Room]:
     cellar = Room(
         id="cellar",
         name="The Tavern Cellar",
+        desc="The tavern cellar. Barrels, crates, and the cold coming up through the stone. "
+             "What supplies the town has left are stacked down here.",
+        features=["stacked barrels and crates", "a low stone ceiling", "cold rising through the floor"],
         obstacles={(4, 4), (5, 4), (13, 8), (14, 8)},   # barrels and crates
         doors=[Door(x=9, y=0, to_room="tavern", spawn=(9, GRID_H - 2))],
     )
     market = Room(
         id="market",
         name="The Dusk Market",
+        desc="The Dusk Market. Most of the stalls are folded up for good and one is still "
+             "trading. What changes hands here now is salvage, not produce.",
+        features=["one stall still trading", "folded-up empty stalls", "crates stacked against a wall"],
         interactables=[street_lamp("lamp_market", (4, 3))],
         obstacles={(12, 4), (13, 4), (14, 4),     # Sella's stall
                    (4, 8), (5, 8)},                # stacked crates
@@ -135,6 +161,9 @@ def build_rooms() -> dict[str, Room]:
     road = Room(
         id="road",
         name="The Old Road",
+        desc="The Old Road out of town, running east toward the ridge. Frost in the ruts, "
+             "roadside stones, and behind you the lamps of town getting further apart.",
+        features=["frost standing in the wheel ruts", "roadside stones", "the lights of town behind you"],
         obstacles={(6, 4), (12, 9)},              # roadside rocks
         doors=[
             Door(x=0, y=MIDY, to_room="market", spawn=(R - 1, MIDY)),
@@ -145,6 +174,9 @@ def build_rooms() -> dict[str, Room]:
     home = Room(
         id="home",
         name="Perrin's House",
+        desc="Perrin's house. A cold hearth, one chair, a table with nothing on it. Nobody "
+             "has been invited in here for a very long time.",
+        features=["a hearth gone cold", "one chair, pulled away from it", "a bare table"],
         obstacles={(7, 8), (8, 8),                # a table
                    (13, 3), (14, 3)},             # a cold hearth / shelf
         doors=[Door(x=9, y=GRID_H - 1, to_room="road", spawn=(9, 1))],
@@ -152,6 +184,9 @@ def build_rooms() -> dict[str, Room]:
     camp = Room(
         id="camp",
         name="The Waystation",
+        desc="The Waystation: a lean-to and a banked fire on the last flat ground before "
+             "the climb. Travellers used to wait here for company before going up.",
+        features=["a banked fire ringed with stones", "a lean-to open to the road", "the ridge rising east"],
         biome="camp",
         interactables=[
             Interactable(
@@ -160,6 +195,7 @@ def build_rooms() -> dict[str, Room]:
                 hint="E: rest by the fire",
                 effects=[{"heal_full": True}, {"advance_day": True}],
                 use_msg="You rest by the fire.",
+                witness_msg="You sat out a night at the waystation fire with the player.",
             ),
             Interactable(
                 id="camp_chest", kind="chest", pos=(6, 8), name="supply chest",
@@ -179,6 +215,9 @@ def build_rooms() -> dict[str, Room]:
     ridge_foot = Room(
         id="ridge_foot",
         name="The Ridge — Foot",
+        desc="The foot of the ridge. Snow to the knee, and the town's lights small and "
+             "yellow far below. Tracks going up tend to stop somewhere around here.",
+        features=["snow drifted over buried rock", "the town's lights far below", "tracks that stop"],
         biome="snow",
         obstacles={(4, 4), (14, 8)},              # snow-buried rocks
         doors=[
@@ -189,6 +228,9 @@ def build_rooms() -> dict[str, Room]:
     ridge_pass = Room(
         id="ridge_pass",
         name="The Ridge — Windward Pass",
+        desc="The Windward Pass: a narrow rocky throat where the wind never lets up. The "
+             "cold in here does not behave like weather.",
+        features=["a narrow rocky throat", "wind that never stops", "cold that pools and stays"],
         biome="snow",
         obstacles={(5, 5), (6, 5), (13, 7), (14, 7), (9, 9)},  # a narrow, rocky pass
         doors=[
@@ -199,6 +241,9 @@ def build_rooms() -> dict[str, Room]:
     ridge_summit = Room(
         id="ridge_summit",
         name="The Ridge — Summit",
+        desc="The summit. Snow, sky, and a stillness with weight to it. The dark up here "
+             "does not move the way dark is supposed to.",
+        features=["nothing but snow and sky", "a stillness that has weight", "dark that does not move right"],
         biome="snow",
         doors=[Door(x=9, y=0, to_room="ridge_pass", spawn=(9, GRID_H - 2))],
     )
@@ -264,16 +309,20 @@ def ensure_world_complete(state: WorldState) -> None:
 
 
 def starter_quest() -> Quest:
-    """The single authored quest: Wren asks you to relight three lamps."""
+    """The one authored quest: find the lamplighter's apprentice.
+
+    A true leaf — no follow-up, no check-back breadcrumb. Everything after this,
+    the lamps included, comes out of Wren's own agenda (npc/agenda.py) rather than
+    being scripted here. Talking to her completes it.
+    """
     return Quest(
-        id="relight_the_lamps",
-        title="Relight the Lamps",
-        description="Relight the three dead lamps around town to hold back the dark.",
+        id="find_the_apprentice",
+        title="Find the lamplighter's apprentice",
+        description="Somebody still tends the lamps in Emberhold. Find them.",
         giver="wren",
-        objective=Objective(type="interact", target="lamp", count=3),
-        reward=Reward(type="affinity", value="15"),
-        # After the lamps, Wren decides where the player's path leads next.
-        followups=[{"kind": "decide_later"}],
+        objective=Objective(type="talk_to", target="wren", count=1),
+        reward=Reward(type="affinity", value="0"),
+        followups=[],
     )
 
 
@@ -300,6 +349,8 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
         player=PlayerState(room="square", x=9, y=8, inventory=["coin"] * 5),
         npcs=npcs,
         lamps=lamps,
+        quests=[starter_quest()],       # in hand from the first frame
+
         ground_items=[
             GroundItem("ridge_pass", 3, 3, "tonic"),          # a supply to find
             GroundItem("ridge_foot", 5, 8, "worn_staff"),     # Ansel's staff, on the ridge

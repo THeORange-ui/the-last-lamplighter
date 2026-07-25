@@ -38,7 +38,8 @@ class Interactable:
     hint: str = ""               # player-facing "E: ..." prompt
     requires: dict = field(default_factory=dict)
     effects: list[dict] = field(default_factory=list)
-    use_msg: str = ""            # flavor line on a successful use
+    use_msg: str = ""            # flavor line on a successful use, shown to the player
+    witness_msg: str = ""        # what someone standing here remembers seeing (1st person)
     consumes: bool = True        # spend requires["item"] on success
     blocks: bool = True          # does it block its tile?
     once: bool = False           # usable only once

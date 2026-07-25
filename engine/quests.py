@@ -193,7 +193,11 @@ def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
         if q.progress >= q.objective.count:
             q.status = "complete"
             _grant_reward(q, state)
-            state.events.record("quest_complete", f"Completed the quest “{q.title}”.")
+            from engine.witness import BEAT, record_experience
+            record_experience(
+                state, "quest_complete", f"Completed the quest “{q.title}”.",
+                room=state.player.room, salience=BEAT,
+                first_person=f'You were there when the player finished "{q.title}".')
             _activate_followups(q, state, known)
             just_done.append(q)
             if on_complete:

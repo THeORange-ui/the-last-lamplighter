@@ -18,8 +18,9 @@ from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
 from engine.state import GroundItem
 from engine.trade import is_vendor
+from engine.witness import BEAT, MAJOR, NOTE, record_experience
 from engine.world import NPC_SPAWNS
-from engine.world import ensure_world_complete, new_world, starter_quest
+from engine.world import ensure_world_complete, new_world
 from npc.memory import NPCMemory
 from npc.roster import character_name
 from ui import theme as T
@@ -238,10 +239,8 @@ class Game:
                 return
             p.room = door.to_room
             p.x, p.y = door.spawn
-            self.world.events.record(
-                "arrive", f"You entered {self.rooms[p.room].name}.", public=False
-            )
             self._gather_party()          # companions follow you through the door
+            self._record_arrival()
             self.try_pickup()
             self.on_quests_completed(refresh_and_complete(self.world, self.known))  # "reach"
             self.check_encounters()
@@ -253,6 +252,20 @@ class Game:
         self._advance_trail(old)
         self._place_followers()
         self.try_pickup()
+
+    def _record_arrival(self):
+        """Walking into a room is something your companions *did*, not something the
+        people already standing there did — so only the party remembers it, and only
+        the first time, or memory fills up with forty identical arrivals."""
+        room = self.rooms[self.world.player.room]
+        desc = f" {room.desc}" if room.desc else ""
+        record_experience(
+            self.world, "arrive", f"You entered {room.name}.",
+            room=room.id, public=False, salience=NOTE,
+            first_person=f"You went with the player into {room.name}.{desc}",
+            targets=list(self.world.party),
+            once_key=f"room:{room.id}",
+        )
 
     # --- party movement ---------------------------------------------------
     def _reset_trail(self):
@@ -401,7 +414,17 @@ class Game:
         if g:
             self.world.ground_items.remove(g)
             p.inventory.append(g.item)
-            self.set_toast(f"Picked up: {display_name(g.item)}.")
+            label = display_name(g.item)
+            self.set_toast(f"Picked up: {label}.")
+            # Anyone here sees it — and if it's something they have a bond with
+            # (Ansel's staff, to Wren), the memory is pinned rather than merely kept.
+            record_experience(
+                self.world, "item_get", f"You picked up the {label}.",
+                room=p.room, public=False, salience=BEAT,
+                first_person=f"You watched the player pick up the {label}, "
+                             f"right here in {self.rooms[p.room].name}.",
+                bond_items=(g.item,),
+            )
 
     def drop_item(self, item: str):
         """Drop one of an item onto a free tile near the player."""
@@ -495,9 +518,12 @@ class Game:
                 lost += 1
             if ctx["type"] == "npc":
                 w.npcs[ctx["npc_id"]].flags["hostile"] = False
-            w.events.record("knockout",
-                            "You were beaten down, and woke later in the square.",
-                            public=False)
+            record_experience(
+                w, "knockout", "You were beaten down, and woke later in the square.",
+                room=w.player.room, public=False, salience=BEAT,
+                first_person="You were there when the player was beaten down. You got "
+                             "them back to the square.",
+                targets=list(w.party))
             self.set_toast("You wake in the square, aching."
                            + (f" {lost} coins slipped away." if lost else ""))
             return
@@ -518,12 +544,23 @@ class Game:
             w.hearthlight = 100
             verb = ("You lay the Gloam to rest." if outcome == "won"
                     else "You reach the Gloam, and it yields.")
-            w.events.record("gloam", f"{verb} The Hearthlight steadies and the dusk lifts.")
+            seen = ("You stood on the summit with the player and watched them put the "
+                    "Gloam down." if outcome == "won" else
+                    "You stood on the summit with the player and watched the Gloam yield "
+                    "to them. It was not killed. It simply stopped pulling.")
+            record_experience(w, "gloam",
+                              f"{verb} The Hearthlight steadies and the dusk lifts.",
+                              room=w.player.room, salience=MAJOR,
+                              first_person=seen, targets=list(w.party))
             self.set_toast("The dusk lifts. Emberhold will hold.")
         elif ctx["type"] == "creature":
             w.flags[f"{ctx.get('room', 'ridge')}_cleared"] = True
             verb = "drive off" if outcome == "won" else "quiet"
-            w.events.record("fight", f"You {verb} the gloamlings on the ridge.")
+            record_experience(w, "fight", f"You {verb} the gloamlings on the ridge.",
+                              room=w.player.room, salience=BEAT,
+                              first_person=f"You fought alongside the player on the ridge "
+                                           f"and helped {verb} the gloamlings.",
+                              targets=list(w.party))
             self.set_toast("The snow settles. The way is clear.")
         else:
             npc_id = ctx["npc_id"]
@@ -561,8 +598,12 @@ class Game:
             self.set_toast(result.message)
         if not result.ok:
             return
-        for kind, text in result.events:
-            self.world.events.record(kind, text)
+        # Whoever is standing here saw it happen (engine/witness.py).
+        events = result.events or (
+            [("interact", f"You used the {inter.label}.")] if inter.witness_msg else [])
+        for i, (kind, text) in enumerate(events):
+            record_experience(self.world, kind, text, room=room.id, salience=NOTE,
+                              first_person=inter.witness_msg if i == 0 else None)
         if result.panel == "storage":
             self.storage_panel = StoragePanel(self.world)
             self.storage_open = True
@@ -570,20 +611,9 @@ class Game:
             self.on_quests_completed(refresh_and_complete(self.world, self.known))
 
     def open_dialogue(self, npc_id):
-        # Deterministic onboarding: Wren always has the starter quest to give,
-        # and reliably supplies the oil needed to light the lamps.
-        if npc_id == "wren" and not self.world.has_quest("relight_the_lamps"):
-            self.world.quests.append(starter_quest())
-            wren = self.world.npcs["wren"]
-            moved = 0
-            while moved < 3 and "oil_flask" in wren.inventory:
-                wren.inventory.remove("oil_flask")
-                self.world.player.inventory.append("oil_flask")
-                moved += 1
-            self.world.events.record(
-                "quest_start", "Wren asked you to relight the three lamps and gave you oil."
-            )
-            self.set_toast(f"New quest: Relight the Lamps  (+{moved} oil)")
+        # No scripted onboarding. The only authored quest is "find Wren"; the lamps
+        # come from Wren's own agenda, and the oil from her offering it, from Sella's
+        # stock, or from the cellar cache.
         self.dialogue = DialogueBox(
             self.world, self.rooms, self.known, npc_id, self.memory_for(npc_id)
         )

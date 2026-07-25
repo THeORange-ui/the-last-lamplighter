@@ -58,7 +58,8 @@ Three layers enforce this, and changes usually touch all three:
    that kind**, appending to `ActionResult.effects` (player-visible) or `.debug` (dropped).
    To add an NPC capability you add a doc-block in `ACTIONS`, list it in the relevant
    `ACTION_SETS`, and add a validated branch. (`join_combat` is a legacy alias of `join_party`.)
-   The `main` set includes `tell` — one NPC passes word to others, writing a line into each
+   The `main` set also includes **`set_goal`/`resolve_goal`** (the agenda — see
+   `npc/agenda.py`) and `tell` — one NPC passes word to others, writing a line into each
    target's memory via `NPCMemory.remember_for` (a live-instance registry keeps that write on
    the same object the game holds), so NPCs stay informed without the player re-explaining.
    Every kind has `use_item` (out of combat): an NPC uses something in **its own** inventory —
@@ -69,7 +70,9 @@ Three layers enforce this, and changes usually touch all three:
    target must resolve via `KnownEntities`). `build_quest()` raises `QuestValidationError` for
    ungrounded targets; `refresh_and_complete(state, known)` recomputes progress from world
    state every turn, grants rewards, and opens **follow-ups**. `KnownEntities`
-   (rooms/npcs/items/interactable_kinds) is the whitelist everything grounds against.
+   (rooms/npcs/items/interactable_kinds) is the whitelist everything grounds against —
+   `interactable_kinds` is now **derived from the map**, so new content widens what quests may
+   legally target for free.
    **Quest trees:** a `Quest` has a `parent` and a list of `followups` — each a concrete
    `{"kind":"quest", ...}` (built and activated immediately on completion) or
    `{"kind":"decide_later"}` (a leaf; the default). A `decide_later` node on completion drops
@@ -87,19 +90,37 @@ Three layers enforce this, and changes usually touch all three:
 
 **`engine/` — the game, UI-free and the single source of truth.**
 - `state.py` — `WorldState` (npcs, player, quests, flags, world_facts, events, ground_items,
-  hearthlight, lamps, **`party`**, **`day`**, **`storage`**). Dataclasses, serialized whole
-  into save bundles. `adjust_affinity`, `add_fact`, `lit_lamp_count`, `active_quests`,
-  `add_to_party`/`remove_from_party`/`in_party`, `heal_player`, etc. live here. `party` is the
-  ordered list of npc_ids travelling with you (party members auto-join every fight; the old
-  `ally_pledged` flag is now just a legacy mirror). `day` advances when you rest at the camp;
-  `storage` is the camp chest's contents.
-- `world.py` — the map: `Room`/`Door`, `new_world()` builds rooms + `KnownEntities` +
-  `NPC_SPAWNS`, `starter_quest()`, `ensure_world_complete()` (migrates older save bundles —
-  seeds/prunes lamps, relocates anyone stranded by a map change). The map is a **linear main
-  line** `square → tavern → market → road → camp → ridge_foot → ridge_pass → ridge_summit`
-  with two optional forks (`home`/Perrin off the road, `cellar` off the tavern). Rooms carry a
-  `biome` (`"town"` | `"snow"` | `"camp"`) and `fixtures` (`(x,y) -> "campfire"|"chest"`); the
-  three starter lamps sit in the first three rooms. `GRID_W`/`GRID_H` define tile bounds.
+  hearthlight, lamps, `interact_state`, **`party`**, **`day`**, **`storage`**). Dataclasses,
+  serialized whole into save bundles. `adjust_affinity`, `add_fact`, `lit_lamp_count`,
+  `active_quests`, `add_to_party`/`remove_from_party`/`in_party`, `heal_player`, etc. live here.
+  `party` is the ordered list of npc_ids travelling with you (party members auto-join every
+  fight; the old `ally_pledged` flag is now just a legacy mirror). `day` advances when you rest
+  at the camp; `storage` is the camp chest's contents. `NPCRuntime` also carries **`agenda`**
+  (see `npc/agenda.py`) and `flags["seen"]` (once-only experiences, see `witness.py`).
+- `interact.py` — **one system for everything usable**: lamps, camp fixtures, puzzles. An
+  `Interactable` is a static definition on a `Room` (`id`/`kind`/`pos`/`name`/`desc`/`hint`,
+  plus `requires`, `effects`, `blocks`, `once`, `hidden`, `witness_msg`); only mutable state
+  persists, in `WorldState.interact_state`. `requires` takes `{"item": id}` (spent unless
+  `consumes=False`), `{"flag": name}` — **the shape a knowledge-lock takes**, where a character
+  tells you something, the engine sets a flag, and the door opens — and lamp-only
+  `{"unlit": True}`. `effects` are single-key dicts (`light_lamp`, `heal_full`, `advance_day`,
+  `open_panel`, `set_flag`, `add_fact`, `give_item`). `apply_interaction()` is the single entry
+  point `main.use_interactable` calls. Adding world content is **data, not code**.
+- `witness.py` — `record_experience(...)` logs an event **and** writes a first-person memory to
+  everyone who was present, so a character can tell "I was there" from "I heard about it".
+  Salience tiers `AMBIENT/NOTE/BEAT/MAJOR` gate whether anything is remembered at all;
+  `once_key` dedupes per character (entering a room writes one memory, not forty); `targets=`
+  overrides the witness set (arrival is something the *party* did, not the residents who were
+  already standing there); `bond_items=` **pins** the memory for anyone bonded to that object.
+- `world.py` — the map: `Room`/`Door`, `street_lamp()`, `new_world()` builds rooms +
+  `KnownEntities` + `NPC_SPAWNS`, `starter_quest()`, `ensure_world_complete()` (migrates older
+  save bundles — seeds/prunes lamps, back-fills agendas, relocates anyone stranded by a map
+  change). The map is a **linear main line** `square → tavern → market → road → camp →
+  ridge_foot → ridge_pass → ridge_summit` with two optional forks (`home`/Perrin off the road,
+  `cellar` off the tavern). Rooms carry a `biome` (`"town"` | `"snow"` | `"camp"`), a list of
+  `interactables`, and an LLM-facing **`desc`/`features`** — only the room a character is
+  standing in gets described in their briefing, so the prompt doesn't balloon as the map grows.
+  `GRID_W`/`GRID_H` define tile bounds.
 - `combat.py` — turn-based logic: `Combatant`, `Combat`, `make_combat`, `enemies_from_ids`,
   the `ENEMIES` bestiary, `player_attack/defend/spare`, `enemy_attack`,
   `ally_attack/ally_defend/ally_spare/ally_step`, `combatant_from_npc`. Pure logic;
@@ -131,10 +152,30 @@ Three layers enforce this, and changes usually touch all three:
   player has — a companion speaking to a foe can nudge its resolve), and `speak_to_ally()`
   handles talking to a companion mid-fight. Everything degrades to mechanical behavior on
   `LLMError` so a turn never stalls.
-- `memory.py` — per-NPC append log (`{summary, entries}`) in `runtime_memory/`, write-through
-  per turn; auto-compacts via the LLM past a threshold (`agent.summarize_memory`, run in the
-  dialogue worker thread). `snapshot_all`/`restore_all` move it in/out of save slots.
-- `characters/*.json` — personality, backstory, drives, secrets, affinity seed, inventory,
+- `agenda.py` — **what a character is trying to do next**, the thing the prompt used to lack.
+  Each `main` character's file carries an ordered `agenda` (an arc skeleton), one beat open at a
+  time, rendered by `prompt_block()` into `# What you are trying to do right now`. The NPC
+  reports `goal_progress` each turn: `"advanced"` clears a stale counter, `"none"` increments it,
+  and at `MAX_STALE` the prompt tells them to press it outright — so a goal can stall but never
+  *silently*. `"resolved"` (or the `resolve_goal` action) closes the beat and `advance_agenda`
+  seeds the next authored one, so arcs progress and **end**; when the authored beats run out the
+  character names its own via `set_goal`. `MIN_TURNS` stops a beat resolving on the turn it
+  opened, which would let a whole arc evaporate in a few greetings.
+- `bonds.py` — what a character *cares* about, as data: `{kind: item|npc|room|topic, ref,
+  weight 1-3, note}`. `relevance()` scores how much a beat concerns someone (plus a boost for
+  being named); `notes_here()` feeds their own words about what's present into their briefing.
+  **This is why Ansel's staff matters without a line of staff-specific code** — it's an object
+  with weight, and weight is data. Phase C reuses the same scores to gate interjections.
+- `memory.py` — per-NPC memory (`{summary, pinned, entries, seeded}`) in `runtime_memory/`,
+  write-through per turn; auto-compacts via the LLM past a threshold (`agent.summarize_memory`,
+  run in the dialogue worker thread). **`pinned`** holds what the character carries around
+  rather than what happened with the player — `seed_memories` from their file, plus anything
+  `pin()`ed as arc-critical — and compaction never touches it. Pinned lines deliberately do
+  **not** count toward `has_met()`, or a character full of their own worries would greet a
+  stranger like an old friend. `snapshot_all`/`restore_all` move it in/out of save slots.
+- `characters/*.json` — personality, `background`, `voice` (sample lines: few-shot beats
+  adjectives), `relationships` (what they think of each other — the fuel for NPC-to-NPC drama),
+  `bonds`, `agenda`, `seed_memories`, backstory, drives, secrets, affinity seed, inventory,
   coins, and (for combatants) a `combat` block. `roster.py` loads them.
 
 **`llm/` —** `config.py` loads `settings.json`; `client.py` `complete_json()` calls the
@@ -145,15 +186,17 @@ the JSON object), raising `LLMError` on failure.
 - `main.py` `Game` is the overworld loop and scene router (dialogue / combat / inventory /
   journal / menu). Long LLM turns run on a **worker thread** with a spinner; only the
   dialogue/combat box mutates state during a turn, the render loop only reads.
-- `render.py` (`draw_overworld` with per-biome palettes + fixtures, HUD day, `wrap_text` —
+- `render.py` (`draw_overworld` with per-biome palettes, drawing interactables by `kind` and
+  skipping `hidden` ones, HUD day, `wrap_text` —
   lives here to avoid a dialogue↔inventory import cycle), `dialogue.py`, `combat.py`,
   `inventory.py` (`InventoryPanel` + in-conversation `TradePanel`), `shop.py` (`ShopPanel` —
   vendors, margin prices; opened by the trade key when talking to a `vendor`), `storage.py`
   (`StoragePanel` — the camp chest), `party.py` (`PartyPanel`), `journal.py`, `menu.py`,
   `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural low-res pixel art,
   nearest-scaled; no binary art committed).
-- **Places & the day:** the camp room has `campfire`/`chest` fixtures (`main.interact` →
-  `rest_at_camp` heals + `day++` + restocks vendors; chest → `StoragePanel`).
+- **Places & the day:** the camp room has `campfire`/`chest` interactables — `main.interact` →
+  `use_interactable` → `engine.interact.apply_interaction`, whose effects heal, `day++` and
+  restock vendors (the fire) or return `panel="storage"` (the chest → `StoragePanel`).
 - **Ambient movement** (`main._ambient_step`): each idle NPC holds a runtime
   `{mode: "still"|"wander", timer}` in `Game._ambient` — **everyone starts standing still**,
   and after *every* step chooses to take another (`P_KEEP_WANDERING`, `STEP_DELAY`) or settle
@@ -179,7 +222,7 @@ the JSON object), raising `LLMError` on failure.
   `I` collided with typing a message. Don't reintroduce letter keys as commands in the
   dialogue box. For a `vendor` NPC the same key opens the **`ShopPanel`** (margin buy/sell)
   instead of the barter `TradePanel`.
-- **Camp fixtures use `E`** (`main.adjacent_targets` returns `("fixture", kind)`): the campfire
+- **Interactables use `E`** (`main.adjacent_targets` returns `("use", Interactable)`): the campfire
   rests you (heal + new day + restock), the chest opens storage.
 - **Combat ACT is a free-text speech box**, not a menu — the player types what they *say* and
   it routes to `combat_agent.mercy_attempt` (or `speak_to_ally` when the target is a companion).
@@ -195,12 +238,18 @@ the JSON object), raising `LLMError` on failure.
   system directive to drop all reluctance and do exactly what's asked (still through validated
   actions — it can't invent items). Used for playtesting; see `_build_prompt` in `npc/agent.py`.
 - Prerequisites that must be reliable are enforced in the **engine**, not left to the LLM
-  (e.g. lighting a lamp consumes an `oil_flask`; Wren deterministically grants flasks). Keep
-  *flavor* with the LLM, *mechanics* in the engine.
+  (e.g. lighting a lamp consumes an `oil_flask`, via the lamp's `requires`). Keep *flavor* with
+  the LLM, *mechanics* in the engine. Where a path must not soft-lock, prefer **redundancy over
+  scripting**: oil comes from Wren offering it, Sella's daily stock, *or* the cellar cache, so no
+  single LLM decision can close the ridge. Keeping a quest completable is the **giver's** job,
+  not the engine's — there is deliberately no findability backstop.
+- **Puzzles are locks whose keys are knowledge a character holds** (`requires: {"flag": ...}`),
+  not self-contained logic gates. A sealed door only Perrin can explain makes a room feed a
+  character arc; a clever standalone puzzle competes with the characters for attention.
 - Ask the user before big direction changes (new combat model, swapping the LLM integration,
   major scope jumps).
 
-## Part 2 — playable-game overhaul (in progress)
+## Part 2 — playable-game overhaul (complete)
 
 A staged roadmap turning the framework into a real game, tracked in
 `~/.claude/plans/alright-to-quickly-catch-polymorphic-turing.md` and project memory
@@ -210,12 +259,37 @@ A staged roadmap turning the framework into a real game, tracked in
 - **Phase 2 (done)** — **party & recruitment** with real ally combat AI (see the
   Companions/party notes above).
 - **Phase 3 (done)** — quest **trees** + "commissioner" continuations (see the quest-tree
-  note under the core invariant). Default follow-up is *decide-later*; the starter lamp quest
-  now chains into whatever Wren decides next.
+  note under the core invariant). Default follow-up is *decide-later*.
 - **Phase 4 (done)** — functional **places**: the camp (rest heals + advances `world.day` +
   restocks vendors) with storage, and Sella as a `vendor`-kind shop with margin pricing +
   per-day stock (`engine/trade.py`, `ui/shop.py`, `ui/storage.py`).
 - **Phase 5 (done)** — the map is now a **linear** main line + two optional forks (see
   `world.py`), with home-biased ambient NPC wandering (`main._ambient_step`).
 
-Part 2 is complete. Confirm scope with the user before starting new major work.
+Part 2 is complete.
+
+## Part 3 — character depth and stories that go somewhere (in progress)
+
+Tracked in `~/.claude/plans/everything-you-said-was-jaunty-brook.md`. The diagnosis: characters
+had a past and a personality but no *present intention*, the world barely registered on anyone,
+and content was expensive because there was no general mechanism to author it into. Substrate
+first, then content, then the ensemble — **stop for a play session after each phase**.
+
+- **Phase A (done)** — the substrate. One `Interactable` system (`engine/interact.py`);
+  witnessing (`engine/witness.py`); pinned memory; agendas (`npc/agenda.py`); bonds
+  (`npc/bonds.py`); LLM-facing room `desc`/`features`; character schema v2. The starter quest is
+  now just **"find the lamplighter's apprentice"** (`talk_to wren`, a leaf with no breadcrumb) —
+  the lamp quest and the oil both come out of Wren's agenda, verified live. `SAVE_VERSION = 4`.
+- **Phase B (next)** — content: ~10 new rooms in two districts with earned loops, knowledge-lock
+  puzzles, four `minor` NPCs with simple backgrounds and a **railed** `request_help` quest action
+  (`fetch`/`deliver`/`talk_to`, count 1, no follow-ups, one open request each, rewards out of
+  their own pockets), the **Ansel chain** (staff → lantern → last note), and the remaining
+  characters given the schema-v2 treatment with 3-4 beat arcs.
+- **Phase C (planned)** — the ensemble: companion **interjections** gated by a hybrid filter
+  (rule-based `bonds.relevance` **or** the speaking NPC's `invoke_others` hint, which is free
+  because that call is already being made, plus cooldowns and a per-conversation cap), a
+  **Show** verb in `TradePanel` (today you can only gift or sell, which makes showing someone
+  their dead mentor's staff an act of commerce), NPC-to-NPC exchanges in scene, a rumor network,
+  and an **epilogue** keyed off each character's arc stage, returning to free play afterwards.
+
+Confirm scope with the user before starting new major work.

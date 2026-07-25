@@ -208,7 +208,14 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             npc_inv.remove(item)
             state.player.inventory.append(item)
             label = display_name(item)
-            state.events.record("item_get", f"{name} gave you the {label}.", public=False)
+            # Anyone else in the room sees the handover — and if the object matters to
+            # them, they will not forget it (engine/witness.py pins bonded items).
+            from engine.witness import BEAT, record_experience
+            record_experience(
+                state, "item_get", f"{name} gave you the {label}.",
+                room=state.npcs[npc_id].room, public=False, salience=BEAT,
+                first_person=f"You saw {name} hand the player the {label}.",
+                exclude=(npc_id,), bond_items=(item,))
             result.effects.append(f"{name} gives you: {label}.")
 
         elif atype == "reveal_fact":

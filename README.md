@@ -11,6 +11,13 @@ Hearthlight, is failing; something on the ridge — the **Gloam** — is eating 
 light. Talk to the townsfolk, take up quests that emerge from them, and find your
 way to the ridge.
 
+You begin with one instruction — *find the lamplighter's apprentice* — and nothing
+else is scripted. Each character carries their own **agenda**: what they are trying
+to do this week, which they will raise with you themselves, press you about if it
+stalls, and set aside for the next thing once it's done. The lamps need relighting
+because Wren has been putting it off and is frightened to go alone, not because a
+quest was placed in the world.
+
 ## Setup
 
 ```bash
@@ -51,6 +58,13 @@ view with both inventories: **Gift** or **Sell** your items, **Ask for** or **Bu
 Gifting and asking go through the NPC's own judgement; buying and selling use coins at
 fixed catalog prices.
 
+Characters remember what they were **there** for. Take a companion into the tavern
+cellar and they remember the room; pick something up in front of them and they saw
+you do it; hand them a book and they read it and know what it said. What they only
+heard about second-hand reaches them as rumor instead — so telling someone what
+happened is a real thing to do, and finding Ansel's old staff in front of his
+apprentice is not the same as mentioning it later.
+
 The world runs as a **main line** from the town out to the ridge —
 Square → Tavern → Market → the Old Road → the Waystation camp → the ridge — with a couple of
 optional side rooms to explore. **Sella** keeps a market stall: press **Ctrl/Cmd** at her to
@@ -74,8 +88,8 @@ on exit; `--fresh` wipes all saves and memory.
 
 | Layer | What it does |
 |-------|--------------|
-| `engine/` | `WorldState` (the single source of truth), the bounded+checkable quest system, and the Emberhold map. |
-| `npc/` | Character files (`characters/*.json`), per-NPC memory, the action vocabulary + validation, and the LangGraph brain (`agent.py`: perceive → reason → act). |
+| `engine/` | `WorldState` (the single source of truth), the bounded+checkable quest system, the Emberhold map, one `Interactable` system for lamps/fixtures/puzzles, and `witness.py` (events become the first-person memories of whoever was present). |
+| `npc/` | Character files (`characters/*.json`), per-NPC memory, `agenda.py` (what each character is pursuing), `bonds.py` (what they care about), the action vocabulary + validation, and the LangGraph brain (`agent.py`: perceive → reason → act). |
 | `llm/` | Loads `settings.json` and talks to the OpenAI-compatible endpoint, parsing JSON defensively (no reliance on the function-calling API). |
 | `ui/` | Pygame rendering + the dialogue overlay (free-text input, threaded turn, typewriter). |
 
