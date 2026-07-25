@@ -67,7 +67,10 @@ Three layers enforce this, and changes usually touch all three:
    actually learn it), food is consumed. It deliberately does **not** call
    `engine.items.use_item`, which applies *player* effects (healing the player, `map_read`).
 2. **`engine/quests.py`** — quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
-   target must resolve via `KnownEntities`). `build_quest()` raises `QuestValidationError` for
+   target must resolve via `KnownEntities`). **`judged`** is the exception: its target is a
+   plain-English criterion, `evaluate_progress` never satisfies it, and only the giver closes
+   it via the `complete_quest` action — for things like "put my mind at rest about Ansel" that
+   no counter can decide. `build_quest()` raises `QuestValidationError` for
    ungrounded targets; `refresh_and_complete(state, known)` recomputes progress from world
    state every turn, grants rewards, and opens **follow-ups**. `KnownEntities`
    (rooms/npcs/items/interactable_kinds) is the whitelist everything grounds against —
@@ -165,7 +168,15 @@ Three layers enforce this, and changes usually touch all three:
   weight 1-3, note}`. `relevance()` scores how much a beat concerns someone (plus a boost for
   being named); `notes_here()` feeds their own words about what's present into their briefing.
   **This is why Ansel's staff matters without a line of staff-specific code** — it's an object
-  with weight, and weight is data. Phase C reuses the same scores to gate interjections.
+  with weight, and weight is data.
+- `interject.py` — companions speaking up unprompted, in **two stages so silence is free**:
+  `choose_interjector()` is a pure rule check (bond relevance ≥ `MIN_RELEVANCE`, off
+  `BEAT_COOLDOWN`, hasn't already remarked on this `once_key`) and makes **no LLM call**;
+  only if it returns someone does `interject()` spend one short call for a single line, with
+  no actions — a bark can't change the world, so it needs no validation. `main.beat()` raises
+  beats on room entry, interactable use and pickups, runs the call on a worker thread, and
+  `draw_bark()` shows it above the HUD in the speaker's colour. Measured: ~1 interjection per
+  30 room entries.
 - `memory.py` — per-NPC memory (`{summary, pinned, entries, seeded}`) in `runtime_memory/`,
   write-through per turn; auto-compacts via the LLM past a threshold (`agent.summarize_memory`,
   run in the dialogue worker thread). **`pinned`** holds what the character carries around
@@ -285,9 +296,10 @@ first, then content, then the ensemble — **stop for a play session after each 
   (`fetch`/`deliver`/`talk_to`, count 1, no follow-ups, one open request each, rewards out of
   their own pockets), the **Ansel chain** (staff → lantern → last note), and the remaining
   characters given the schema-v2 treatment with 3-4 beat arcs.
-- **Phase C (planned)** — the ensemble: companion **interjections** gated by a hybrid filter
-  (rule-based `bonds.relevance` **or** the speaking NPC's `invoke_others` hint, which is free
-  because that call is already being made, plus cooldowns and a per-conversation cap), a
+- **Phase C (partly done, rest planned)** — the ensemble. **Done early, from play feedback:**
+  overworld interjections (`npc/interject.py`, the rule half of the hybrid filter) and
+  bystanders remembering conversations they stood in. **Still planned:** the `invoke_others`
+  hint from a speaking NPC (the other half of the filter, for in-conversation interjections), a
   **Show** verb in `TradePanel` (today you can only gift or sell, which makes showing someone
   their dead mentor's staff an act of commerce), NPC-to-NPC exchanges in scene, a rumor network,
   and an **epilogue** keyed off each character's arc stage, returning to free play afterwards.

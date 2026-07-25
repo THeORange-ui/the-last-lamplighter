@@ -58,6 +58,10 @@ view with both inventories: **Gift** or **Sell** your items, **Ask for** or **Bu
 Gifting and asking go through the NPC's own judgement; buying and selling use coins at
 fixed catalog prices.
 
+Companions **speak up on their own** when something in front of them actually touches
+them — an object they knew, a place they have history with — and otherwise walk
+quietly, which is most of the time.
+
 Characters remember what they were **there** for. Take a companion into the tavern
 cellar and they remember the room; pick something up in front of them and they saw
 you do it; hand them a book and they read it and know what it said. What they only

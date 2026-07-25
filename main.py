@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import random
 import sys
+import threading
 
 import pygame
 
@@ -21,6 +22,7 @@ from engine.trade import is_vendor
 from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
                             witnesses)
 from npc.bonds import bond_for
+from npc.interject import choose_interjector, interject
 from engine.world import NPC_SPAWNS
 from engine.world import ensure_world_complete, new_world
 from npc.memory import NPCMemory
@@ -37,6 +39,7 @@ from ui.render import draw_hud, draw_overworld, draw_text
 
 MOVE_DELAY = 0.12   # seconds between grid steps while a direction is held
 TOAST_TIME = 2.6
+BARK_TIME = 5.0     # how long a companion's unprompted remark stays on screen
 
 # --- ambient NPC movement ---
 # Each idle NPC alternates between standing still and wandering: after every step
@@ -103,6 +106,9 @@ class Game:
         self.storage_panel: StoragePanel | None = None
         self._trail: list[tuple[int, int]] = []   # player's recent tiles (for followers)
         self._ambient: dict[str, dict] = {}       # per-NPC {mode, timer}; runtime only
+        self._beat_no = 0                         # notable beats, for bark cooldowns
+        self._bark: dict | None = None            # {npc, text, timer} currently showing
+        self._bark_job: dict | None = None        # an interjection being written
         self.running = True
         self._gather_party()
 
@@ -175,6 +181,43 @@ class Game:
     def set_toast(self, text: str):
         self.toast = text
         self.toast_timer = TOAST_TIME
+
+    # --- companions speaking up -------------------------------------------
+    def beat(self, kind: str, text: str, *, once_key: str, items=(), npcs=()):
+        """Something notable just happened. If it touches somebody standing here hard
+        enough, they get one line about it — decided by a free rule check first, so
+        most beats cost nothing at all (npc/interject.py)."""
+        self._beat_no += 1
+        if self._bark_job is not None or self._bark is not None:
+            return                          # one voice at a time
+        b = {"kind": kind, "text": text, "once_key": once_key,
+             "items": tuple(items), "npcs": tuple(npcs),
+             "room": self.world.player.room, "n": self._beat_no}
+        npc_id = choose_interjector(self.world, b)
+        if npc_id is None:
+            return
+        job = {"done": False, "npc": npc_id, "text": ""}
+
+        def run():
+            try:
+                job["text"] = interject(self.world, npc_id, b, self.memory_for(npc_id))
+            except Exception:               # a bark must never take the game down
+                job["text"] = ""
+            job["done"] = True
+
+        threading.Thread(target=run, daemon=True).start()
+        self._bark_job = job
+
+    def _update_bark(self, dt):
+        job = self._bark_job
+        if job is not None and job["done"]:
+            self._bark_job = None
+            if job["text"]:
+                self._bark = {"npc": job["npc"], "text": job["text"], "timer": BARK_TIME}
+        if self._bark is not None:
+            self._bark["timer"] -= dt
+            if self._bark["timer"] <= 0:
+                self._bark = None
 
     def on_quests_completed(self, completed):
         """Announce completions and give each quest's giver a personal memory."""
@@ -281,6 +324,7 @@ class Game:
             targets=list(self.world.party),
             once_key=f"room:{room.id}",
         )
+        self.beat("arrive", f"you walked into {room.name}", once_key=f"room:{room.id}")
 
     # --- party movement ---------------------------------------------------
     def _reset_trail(self):
@@ -443,6 +487,8 @@ class Game:
                              f"right here in {self.rooms[p.room].name}.",
                 bond_items=(g.item,),
             )
+            self.beat("pickup", f"the player picked up the {label}",
+                      once_key=f"item:{g.item}", items=(g.item,))
 
     def drop_item(self, item: str):
         """Drop one of an item onto a free tile near the player."""
@@ -622,6 +668,8 @@ class Game:
         for i, (kind, text) in enumerate(events):
             record_experience(self.world, kind, text, room=room.id, salience=NOTE,
                               first_person=inter.witness_msg if i == 0 else None)
+        self.beat("use", f"the player used the {inter.label} in {room.name}",
+                  once_key=f"used:{inter.id}")
         if result.panel == "storage":
             self.storage_panel = StoragePanel(self.world)
             self.storage_open = True
@@ -704,6 +752,7 @@ class Game:
     def update(self, dt):
         if self.toast_timer > 0:
             self.toast_timer -= dt
+        self._update_bark(dt)
 
         if self.menu_open:
             self.menu.update(dt)
@@ -763,6 +812,8 @@ class Game:
         if self.menu_open:
             self.menu.draw(self.screen, self.save_name)
 
+        if self._bark and self.scene == "overworld":
+            self.draw_bark()
         if self.toast_timer > 0:
             self.draw_toast()
 
@@ -774,6 +825,24 @@ class Game:
         s.fill((0, 0, 0, 190))
         self.screen.blit(s, bg.topleft)
         self.screen.blit(img, rect)
+
+    def draw_bark(self):
+        """A companion's unprompted remark, in their own colour, above the HUD."""
+        from ui.render import wrap_text
+        name = character_name(self._bark["npc"])
+        fnt = T.font(17)
+        lines = wrap_text(f"{name}: “{self._bark['text']}”", fnt, T.SCREEN_W - 80)[:3]
+        h = 14 + 22 * len(lines)
+        box = pygame.Rect(24, T.PLAY_H - h - 16, T.SCREEN_W - 48, h)
+        s = pygame.Surface(box.size, pygame.SRCALPHA)
+        s.fill((*T.BOX_BG, 225))
+        self.screen.blit(s, box.topleft)
+        pygame.draw.rect(self.screen, T.npc_color(self._bark["npc"]), box, 1,
+                         border_radius=5)
+        y = box.top + 8
+        for ln in lines:
+            draw_text(self.screen, ln, (box.left + 12, y), fnt, T.TEXT)
+            y += 22
 
     def draw_intro(self):
         overlay = pygame.Surface((T.SCREEN_W, T.SCREEN_H), pygame.SRCALPHA)
