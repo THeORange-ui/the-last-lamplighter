@@ -19,9 +19,24 @@
         "perrin": "Nobody goes to that house. I went once. He didn't shout, which was worse."
     },
     "bonds": [
-        {"kind": "room", "ref": "well_yard", "weight": 3, "note": "The well yard. It's mine, whatever they say."},
-        {"kind": "item", "ref": "lost_locket", "weight": 2, "note": "A tin locket. I know exactly where that went, and it wasn't my fault."},
-        {"kind": "topic", "ref": "gloam", "weight": 2, "note": "The thing up the ridge. I'm not scared of it. I just don't like the dark bit."}
+        {
+            "kind": "room",
+            "ref": "well_yard",
+            "weight": 3,
+            "note": "The well yard. It's mine, whatever they say."
+        },
+        {
+            "kind": "item",
+            "ref": "lost_locket",
+            "weight": 2,
+            "note": "A tin locket. I know exactly where that went, and it wasn't my fault."
+        },
+        {
+            "kind": "topic",
+            "ref": "gloam",
+            "weight": 2,
+            "note": "The thing up the ridge. I'm not scared of it. I just don't like the dark bit."
+        }
     ],
     "knowledge": [
         "A tin locket went down the well yard's well on a broken cord, and can be wound back up on the rope",
@@ -32,9 +47,13 @@
         "Moss knocked the locket down the well themselves, chasing it along the wall, and has been too frightened of Tilda to say so"
     ],
     "affinity_seed": 10,
-    "inventory": ["coin", "coin"],
+    "inventory": [
+        "coin",
+        "coin"
+    ],
     "seed_memories": [
         "The locket went down the well and it was me that did it and I haven't told Tilda. It's still on the rope. I've seen it. I just can't work the windlass on my own.",
         "Nobody says 'the ridge' out loud any more. They say 'up there'. I've been counting."
-    ]
+    ],
+    "opening": "You are hanging over the lip of the well trying to reach something that is very much not reachable, and you are not supposed to be here, and someone has just walked into the yard behind you."
 }

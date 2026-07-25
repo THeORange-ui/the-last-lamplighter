@@ -158,6 +158,15 @@ Three layers enforce this, and changes usually touch all three:
   player has — a companion speaking to a foe can nudge its resolve), and `speak_to_ally()`
   handles talking to a companion mid-fight. Everything degrades to mechanical behavior on
   `LLMError` so a turn never stalls.
+- **First meetings must start mid-something.** Every character file carries an `opening`:
+  what they are in the middle of when you first walk up, injected into the first-meeting
+  prompt with an instruction to lead with it. A character who only introduces themselves
+  gives the player nothing to take hold of — which is exactly why, before this, every story
+  ran through the one character who asked for something on turn one.
+- **An agenda beat must be a pursuit, not a standing state.** "Keep the tavern warm" / "turn a
+  profit" / "be left alone" can never finish, so those characters idled forever while Wren
+  (whose first beat was a real task) carried the whole plot. Standing motivations belong in
+  `drives`; `agenda` holds only things that can be *done*.
 - `agenda.py` — **what a character is trying to do next**, the thing the prompt used to lack.
   Each `main` character's file carries an ordered `agenda` (an arc skeleton), one beat open at a
   time, rendered by `prompt_block()` into `# What you are trying to do right now`. The NPC
@@ -237,8 +246,13 @@ the JSON object), raising `LLMError` on failure.
 
 ## Controls / key routing gotchas
 
-- Overworld: Arrows/WASD move, **E** interact, **I** inventory, **P** party, **J** journal,
-  **Esc** menu.
+- Overworld: Arrows/WASD move, **E** interact, **I** inventory, **P** party, **M** map,
+  **J** journal, **Esc** menu.
+- **The map** (`engine/cartography.py` + `ui/mapview.py`) derives its layout from the graph —
+  a door's position on the wall says which way it leads, so adding a room draws itself. A
+  corner minimap is always up; **M** opens the full map. `waypoints()` turns each active
+  objective into a room marker (reach → the room; talk_to/check_back/deliver → wherever that
+  person is *now*; interact → the nearest unfinished one; fetch → where the thing is lying).
 - **Trade inside a conversation opens with Ctrl/Cmd, not I** (`ui/dialogue.py: TRADE_KEYS`) —
   `I` collided with typing a message. Don't reintroduce letter keys as commands in the
   dialogue box. For a `vendor` NPC the same key opens the **`ShopPanel`** (margin buy/sell)

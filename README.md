@@ -40,7 +40,8 @@ cp settings.example.json settings.json   # then fill in your endpoint
 ```
 
 Move with **Arrows/WASD**, interact with **E**, open your **inventory** with **I**,
-your **party** with **P**, the **journal** with **J**, and the **menu** with **Esc**
+your **party** with **P**, the **map** with **M**, the **journal** with **J**, and the
+**menu** with **Esc**
 (Continue / Save / Load / Save As / Save and Quit). Walk up to an NPC and press E to
 talk; type freely; press Enter to send.
 
@@ -68,6 +69,12 @@ you do it; hand them a book and they read it and know what it said. What they on
 heard about second-hand reaches them as rumor instead — so telling someone what
 happened is a real thing to do, and finding Ansel's old staff in front of his
 apprentice is not the same as mentioning it later.
+
+Everyone is in the middle of something when you meet them, and they lead with it —
+Bram has been watching the road for eight days for a cart that hasn't come, Tilda
+lost her mother's locket on the market run, Perrin wants you to tell the apprentice
+to stop knocking. A corner **minimap** (full map on **M**) marks the room every open
+objective is pointing at, so an errand never turns into a search.
 
 Everyone has something they are working on, and it goes somewhere. Bram keeps the
 last warm room in town, and behind his bar is a coat that has been ready by the door

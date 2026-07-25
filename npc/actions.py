@@ -98,15 +98,18 @@ ACTIONS: dict[str, str] = {
     ),
     "join_party": (
         '- {"type": "join_party"}\n'
-        "    Join the player and travel with them — you become a companion who follows\n"
-        "    them through the world and fights at their side. Only if your character\n"
-        "    truly would throw in their lot with them."
+        "    Go along with the player for a while — you walk together and watch out for each\n"
+        "    other, and you'll be in the fight if one starts. This is an ordinary thing that\n"
+        "    people do, not a vow: it means 'I'll come with you', nothing heavier. Agree to\n"
+        "    it if you trust them enough for a trip and you have reason to go, or if what\n"
+        "    they're doing matters to you. You don't need to like them much."
     ),
     "leave_party": (
         '- {"type": "leave_party"}\n'
-        "    Leave the player's company and go your own way. Use this ONLY when the player\n"
-        "    has asked you to part ways (or your character genuinely wants to). Say your\n"
-        "    goodbye in your dialogue, and you may add a move_to to walk off somewhere."
+        "    Stop travelling together and go your own way. No more of a big deal than\n"
+        "    agreeing to it was — people part company all the time. Use it when the player\n"
+        "    asks, or when you have somewhere of your own to be. Say your goodbye, and you\n"
+        "    may add a move_to to walk off somewhere."
     ),
     "attack": (
         '- {"type": "attack"}\n'
@@ -128,8 +131,10 @@ ACTION_SETS: dict[str, list[str]] = {
              "leave_party", "attack", "end_dialogue"],
     # A vendor is still a person with a plan — Sella has an arc — so she gets the
     # agenda actions, but not quest-giving or companionship.
+    # `request_help` too, or a vendor can ask for something concrete and have no way
+    # to make it a thing the player can actually track — Sella did exactly that.
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item",
-               "set_goal", "resolve_goal", "tell", "end_dialogue"],
+               "request_help", "set_goal", "resolve_goal", "tell", "end_dialogue"],
     "minor": ["adjust_affinity", "reveal_fact", "use_item", "request_help", "tell",
               "end_dialogue"],
 }

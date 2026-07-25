@@ -19,8 +19,10 @@ from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
 from engine.state import GroundItem
 from engine.trade import is_vendor
+from engine.cartography import mark_visited
 from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
                             witnesses)
+from npc.agenda import note_quest_done
 from npc.bonds import bond_for
 from npc.interject import choose_interjector, interject
 from engine.world import NPC_SPAWNS, RIDGE_ROOMS
@@ -32,6 +34,7 @@ from ui.dialogue import DialogueBox
 from ui.combat import CombatScene
 from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
+from ui.mapview import draw_full_map, draw_minimap
 from ui.menu import Menu
 from ui.party import PartyPanel
 from ui.storage import StoragePanel
@@ -92,6 +95,7 @@ class Game:
         self.scene = "intro"          # intro | overworld | dialogue
         self.dialogue: DialogueBox | None = None
         self.journal_open = False
+        self.map_open = False
         self.menu_open = False
         self.inventory_open = False
         self.inv_panel: InventoryPanel | None = None
@@ -110,6 +114,7 @@ class Game:
         self._bark: dict | None = None            # {npc, text, timer} currently showing
         self._bark_job: dict | None = None        # an interjection being written
         self.running = True
+        mark_visited(self.world, self.world.player.room)
         self._gather_party()
 
     def memory_for(self, npc_id: str) -> NPCMemory:
@@ -227,6 +232,8 @@ class Game:
                 self.memory_for(q.giver).remember(
                     f'The player completed the quest you gave them: "{q.title}".'
                 )
+                # Their own goal just moved — make sure they notice next time you talk.
+                note_quest_done(self.world, q.giver, q.title)
         if completed:
             self._auto_commission()
 
@@ -316,6 +323,7 @@ class Game:
         people already standing there did — so only the party remembers it, and only
         the first time, or memory fills up with forty identical arrivals."""
         room = self.rooms[self.world.player.room]
+        mark_visited(self.world, room.id)
         desc = f" {room.desc}" if room.desc else ""
         record_experience(
             self.world, "arrive", f"You entered {room.name}.",
@@ -733,20 +741,24 @@ class Game:
                         self.combat_scene.handle_event(event)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if self.journal_open:
+                    if self.map_open:
+                        self.map_open = False
+                    elif self.journal_open:
                         self.journal_open = False
                     else:
                         self.menu.open()
                         self.menu_open = True
+                elif event.key == pygame.K_m:
+                    self.map_open = not self.map_open
                 elif event.key == pygame.K_j:
                     self.journal_open = not self.journal_open
-                elif event.key == pygame.K_i and not self.journal_open:
+                elif event.key == pygame.K_i and not (self.journal_open or self.map_open):
                     self.inv_panel = InventoryPanel(self.world)
                     self.inventory_open = True
-                elif event.key == pygame.K_p and not self.journal_open:
+                elif event.key == pygame.K_p and not (self.journal_open or self.map_open):
                     self.party_panel = PartyPanel(self.world)
                     self.party_open = True
-                elif not self.journal_open and event.key in INTERACT_KEYS:
+                elif not (self.journal_open or self.map_open) and event.key in INTERACT_KEYS:
                     self.interact()
 
     def update(self, dt):
@@ -760,7 +772,7 @@ class Game:
         if self.inventory_open or self.party_open or self.storage_open:
             return
 
-        if self.scene == "overworld" and not self.journal_open:
+        if self.scene == "overworld" and not (self.journal_open or self.map_open):
             self.move_timer -= dt
             if self.move_timer <= 0:
                 keys = pygame.key.get_pressed()
@@ -801,6 +813,10 @@ class Game:
         elif self.scene == "dialogue" and self.dialogue:
             self.dialogue.draw(self.screen)
 
+        if self.scene == "overworld" and not self.map_open:
+            draw_minimap(self.screen, self.world, self.rooms)
+        if self.map_open:
+            draw_full_map(self.screen, self.world, self.rooms)
         if self.journal_open:
             draw_journal(self.screen, self.world)
         if self.inventory_open and self.inv_panel:
@@ -859,7 +875,7 @@ class Game:
             "",
             "Talk to them. Help them, or don't. Find your way to the ridge.",
             "",
-            "Move: WASD   Interact: E   Inventory: I   Party: P   Journal: J   Menu: Esc",
+            "Move: WASD  Interact: E  Items: I  Party: P  Map: M  Journal: J  Menu: Esc",
             "",
             "Press any key to begin.",
         ]

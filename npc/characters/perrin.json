@@ -25,18 +25,48 @@
         "gloam": "I heard it, the night the light went out. It was not hunting. It was grieving, and nobody believes me, and I stopped saying it."
     },
     "bonds": [
-        {"kind": "topic", "ref": "ansel", "weight": 3, "note": "Ansel. I taught him everything he knew, including how to go up that mountain."},
-        {"kind": "item", "ref": "ansel_lantern", "weight": 3, "note": "Ansel's lantern. I gave him that lantern when he finished his apprenticeship."},
-        {"kind": "item", "ref": "worn_staff", "weight": 2, "note": "A lamplighter's staff. Mine is in the roof space and I have not touched it in years."},
-        {"kind": "topic", "ref": "sigil", "weight": 2, "note": "The old sigil. Lamp inside a ring. I have cut that mark on a hundred doors."},
-        {"kind": "room", "ref": "chapel", "weight": 2, "note": "The lamp chapel. I sat in the back of it every night for a year and then I stopped."},
-        {"kind": "npc", "ref": "wren", "weight": 2, "note": "The new apprentice. They keep better lamps than I did and they don't know it."}
+        {
+            "kind": "topic",
+            "ref": "ansel",
+            "weight": 3,
+            "note": "Ansel. I taught him everything he knew, including how to go up that mountain."
+        },
+        {
+            "kind": "item",
+            "ref": "ansel_lantern",
+            "weight": 3,
+            "note": "Ansel's lantern. I gave him that lantern when he finished his apprenticeship."
+        },
+        {
+            "kind": "item",
+            "ref": "worn_staff",
+            "weight": 2,
+            "note": "A lamplighter's staff. Mine is in the roof space and I have not touched it in years."
+        },
+        {
+            "kind": "topic",
+            "ref": "sigil",
+            "weight": 2,
+            "note": "The old sigil. Lamp inside a ring. I have cut that mark on a hundred doors."
+        },
+        {
+            "kind": "room",
+            "ref": "chapel",
+            "weight": 2,
+            "note": "The lamp chapel. I sat in the back of it every night for a year and then I stopped."
+        },
+        {
+            "kind": "npc",
+            "ref": "wren",
+            "weight": 2,
+            "note": "The new apprentice. They keep better lamps than I did and they don't know it."
+        }
     ],
     "agenda": [
         {
-            "id": "left_alone",
-            "want": "Be left alone, and get whoever is at my door to go away again",
-            "why": "Everyone who has come to that door in thirty years has wanted the lamplighter, and he is not here. He went out the night the light did."
+            "id": "send_wren_away",
+            "want": "Get Wren to stop coming to my door — and stop asking about the ridge",
+            "why": "Every question they ask is one step closer to them climbing it. Ansel asked me the same things. I answered him. He went up and he did not come back."
         },
         {
             "id": "the_old_craft",
@@ -61,8 +91,18 @@
         "I gave Ansel his lantern the day he finished under me. Brass, good glass. I would know it anywhere."
     ],
     "affinity_seed": -40,
-    "combat_stats": {"hp": 22, "attack": 5, "defense": 2, "resolve": 60},
-    "inventory": ["tonic", "old_key", "coin", "coin"],
+    "combat_stats": {
+        "hp": 22,
+        "attack": 5,
+        "defense": 2,
+        "resolve": 60
+    },
+    "inventory": [
+        "tonic",
+        "old_key",
+        "coin",
+        "coin"
+    ],
     "knowledge": [
         "What it is like when the Hearthlight goes fully out",
         "The Gloam is not a beast — it is the dark itself, and it is lonely",
@@ -74,5 +114,6 @@
         "Perrin believes he heard the Gloam speak the night the light died, and that it sounded like grief, not hunger",
         "He thinks the only way to stop the Gloam is to answer it, not fight it — and he is too much a coward to go himself",
         "He has never forgiven himself for letting Ansel go up the ridge in his place"
-    ]
+    ],
+    "opening": "Someone has knocked at your door. Ansel's apprentice has been coming by every few days for weeks — standing there, asking about the old craft, about the night the light went out — and you have shut the door on them every time and stood behind it afterwards. You want it to stop before they get it into their head to go up that mountain the way Ansel did."
 }

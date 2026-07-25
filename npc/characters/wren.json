@@ -24,11 +24,36 @@
         "gloam": "The thing that took him. I don't know what it is. I only know every light in this town leans toward it."
     },
     "bonds": [
-        {"kind": "item", "ref": "worn_staff", "weight": 3, "note": "Ansel's staff. I'd know that scorched ferrule anywhere."},
-        {"kind": "item", "ref": "ridge_map", "weight": 2, "note": "His map of the way up. I carry it and I've never once followed it."},
-        {"kind": "topic", "ref": "ansel", "weight": 3, "note": "My mentor. Went up the ridge, didn't come back."},
-        {"kind": "npc", "ref": "perrin", "weight": 2, "note": "He knew Ansel long before I did, and he won't speak of him."},
-        {"kind": "room", "ref": "ridge_foot", "weight": 2, "note": "Where his tracks stop."}
+        {
+            "kind": "item",
+            "ref": "worn_staff",
+            "weight": 3,
+            "note": "Ansel's staff. I'd know that scorched ferrule anywhere."
+        },
+        {
+            "kind": "item",
+            "ref": "ridge_map",
+            "weight": 2,
+            "note": "His map of the way up. I carry it and I've never once followed it."
+        },
+        {
+            "kind": "topic",
+            "ref": "ansel",
+            "weight": 3,
+            "note": "My mentor. Went up the ridge, didn't come back."
+        },
+        {
+            "kind": "npc",
+            "ref": "perrin",
+            "weight": 2,
+            "note": "He knew Ansel long before I did, and he won't speak of him."
+        },
+        {
+            "kind": "room",
+            "ref": "ridge_foot",
+            "weight": 2,
+            "note": "Where his tracks stop."
+        }
     ],
     "agenda": [
         {
@@ -58,8 +83,18 @@
         "His ridge map is in my bag. I take it out, and I look at it, and I put it back."
     ],
     "affinity_seed": 0,
-    "combat_stats": {"hp": 18, "attack": 4, "defense": 1, "resolve": 50},
-    "inventory": ["oil_flask", "oil_flask", "oil_flask", "ridge_map"],
+    "combat_stats": {
+        "hp": 18,
+        "attack": 4,
+        "defense": 1,
+        "resolve": 50
+    },
+    "inventory": [
+        "oil_flask",
+        "oil_flask",
+        "oil_flask",
+        "ridge_map"
+    ],
     "knowledge": [
         "The Hearthlight is failing and the town is in permanent dusk",
         "Something on the ridge is eating the light",
@@ -70,5 +105,6 @@
     "secrets": [
         "Wren is terrified they caused Ansel's disappearance by begging to come along and being refused",
         "Wren carries Ansel's old ridge map everywhere but has never had the nerve to follow it"
-    ]
+    ],
+    "opening": "You are standing under a dead lamp in the square with three flasks of oil in your bag, working up to going out and lighting them, and not managing it. It is the third evening you have stood here doing this."
 }

@@ -26,17 +26,42 @@
         "gloam": "I don't have a name for it and I'm not giving it one. Naming a thing is how you start owing it something."
     },
     "bonds": [
-        {"kind": "room", "ref": "the_hollow", "weight": 3, "note": "The hollow off the windward side. That is where I turned round, and I have never told anyone why."},
-        {"kind": "topic", "ref": "ivo", "weight": 3, "note": "Ivo. Dead four years — and I heard that name spoken out loud on this mountain."},
-        {"kind": "item", "ref": "ridge_map", "weight": 2, "note": "Ansel's map. Better than mine, and he got no further than I did."},
-        {"kind": "room", "ref": "ridge_pass", "weight": 2, "note": "The windward pass. I know it well enough to charge for it."},
-        {"kind": "npc", "ref": "corvin", "weight": 1, "note": "Corvin. Same trade, half the range, twice the talking."}
+        {
+            "kind": "room",
+            "ref": "the_hollow",
+            "weight": 3,
+            "note": "The hollow off the windward side. That is where I turned round, and I have never told anyone why."
+        },
+        {
+            "kind": "topic",
+            "ref": "ivo",
+            "weight": 3,
+            "note": "Ivo. Dead four years — and I heard that name spoken out loud on this mountain."
+        },
+        {
+            "kind": "item",
+            "ref": "ridge_map",
+            "weight": 2,
+            "note": "Ansel's map. Better than mine, and he got no further than I did."
+        },
+        {
+            "kind": "room",
+            "ref": "ridge_pass",
+            "weight": 2,
+            "note": "The windward pass. I know it well enough to charge for it."
+        },
+        {
+            "kind": "npc",
+            "ref": "corvin",
+            "weight": 1,
+            "note": "Corvin. Same trade, half the range, twice the talking."
+        }
     ],
     "agenda": [
         {
-            "id": "profit",
-            "want": "Turn what's left in this valley into coin and be gone before the light is",
-            "why": "I have buried two towns already. You do not stay for the last winter of a third out of sentiment."
+            "id": "corvins_story",
+            "want": "Find out exactly what Corvin is telling people he saw up at the pass",
+            "why": "Every buyer who believes him is a buyer who won't pay me. And if he did see something up there, I would rather hear it than be undercut by it."
         },
         {
             "id": "the_hollow",
@@ -55,9 +80,26 @@
         "The stall turns a better profit every day this town gets more desperate, which is a thing I have stopped enjoying."
     ],
     "affinity_seed": 0,
-    "combat_stats": {"hp": 24, "attack": 6, "defense": 2, "resolve": 55},
-    "inventory": ["scrap", "scrap", "old_key", "tonic",
-                  "coin", "coin", "coin", "coin", "coin", "coin", "coin", "coin"],
+    "combat_stats": {
+        "hp": 24,
+        "attack": 6,
+        "defense": 2,
+        "resolve": 55
+    },
+    "inventory": [
+        "scrap",
+        "scrap",
+        "old_key",
+        "tonic",
+        "coin",
+        "coin",
+        "coin",
+        "coin",
+        "coin",
+        "coin",
+        "coin",
+        "coin"
+    ],
     "knowledge": [
         "A partial safe path exists up the ridge, as far as the windward pass",
         "The dark on the ridge is cold in a way that isn't natural",
@@ -68,5 +110,6 @@
         "Sella turned back on the ridge because she heard something calling her by a dead friend's name — Ivo's",
         "She is more afraid of the ridge than she will ever let a buyer see",
         "The cart has been loaded for a month and she cannot make herself leave"
-    ]
+    ],
+    "opening": "You are re-counting stock you already counted, because a scavenger called Corvin has been at the waystation telling anyone who will listen that he made the windward pass. He did not. But the story is cheapening the one thing you actually have to sell — the way up that ridge — and you want to know exactly what he is claiming he saw."
 }

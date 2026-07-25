@@ -232,6 +232,9 @@ Rules:
             "join them somewhere: if you want the two of you to go to the ridge, say so and "
             "walk with them. Using move_to would mean walking away ALONE and leaving their "
             "company — do that only if you actually mean to part ways.\n"
+            "Travelling together is an ordinary arrangement, not a vow. You can end it "
+            "whenever you have somewhere else to be, and you should say so plainly when you "
+            "do — no ceremony about it.\n"
         )
     system += _commission_block(world, npc_id, char)
 
@@ -256,10 +259,24 @@ Rules:
                 f"reintroduce yourself. Keep it brief and in character as {char['name']}."
             )
         else:
+            # A first meeting should start in the middle of something. A character who
+            # only introduces themselves gives the player nothing to take hold of, which
+            # is why every story ended up running through the one character who asked
+            # for something on turn one.
+            opening = str(char.get("opening", "")).strip()
             user = (
                 "The player walks up to you for the first time. Introduce yourself "
                 f"naturally and briefly, in character as {char['name']}."
             )
+            if opening:
+                user += (
+                    f"\n\nWhat you are in the middle of, right now: {opening}\n"
+                    "Lead with it. You are not waiting around to be spoken to — you are "
+                    "part-way through your own day and this stranger has walked into it. "
+                    "Bring up what you need in this first exchange, in your own way: "
+                    "grudgingly, or bluntly, or by complaining about it rather than asking. "
+                    "If they could actually help, ask them before they walk off."
+                )
     else:
         user = (
             f'The player says to you: "{state["player_input"]}"\n\n'
@@ -372,10 +389,12 @@ def act(state: TurnState) -> TurnState:
         line += " | " + "; ".join(result.effects)
     mem.remember(line)
 
-    # If a quest THIS npc gave just completed, they personally remember it.
+    # If a quest THIS npc gave just completed, they personally remember it — and it
+    # counts against whatever they were trying to do.
     for q in completed:
         if q.giver == npc_id:
             mem.remember(f'The player completed the quest you gave them: "{q.title}".')
+            agenda.note_quest_done(world, npc_id, q.title)
 
     _record_for_bystanders(world, npc_id, state, result)
 

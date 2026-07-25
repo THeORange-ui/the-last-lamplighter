@@ -93,9 +93,31 @@ def advance_agenda(state, npc_id: str) -> dict | None:
 
 
 def can_resolve(npc) -> bool:
-    """A beat has to have been open for a turn before it can be declared finished."""
+    """A beat has to have been open for a turn before it can be declared finished —
+    unless the thing they actually asked for has been done, which is proof enough."""
     goal = open_goal(npc)
-    return goal is not None and int(goal.get("turns", 0)) >= MIN_TURNS
+    if goal is None:
+        return False
+    return int(goal.get("turns", 0)) >= MIN_TURNS or bool(goal.get("delivered"))
+
+
+def note_quest_done(state, giver: str, title: str) -> None:
+    """A quest this character gave has been completed.
+
+    This is the strongest evidence there is that their current beat has moved, and
+    without it they don't reliably notice: in play, Wren sat on "get the lamps lit"
+    for eight turns after all three were burning, because nothing ever put the fact
+    in front of her at the moment it mattered.
+    """
+    npc = state.npcs.get(giver)
+    goal = open_goal(npc) if npc is not None else None
+    if goal is None:
+        return
+    goal["stale"] = 0
+    done = list(goal.get("delivered") or [])
+    if title not in done:
+        done.append(title)
+    goal["delivered"] = done[-3:]
 
 
 def set_goal(state, npc_id: str, want: str, why: str = "") -> dict | None:
@@ -157,7 +179,17 @@ def prompt_block(state, npc_id: str) -> str:
         "set_goal for something of your own). Do not announce it as an objective; you are "
         "a person with something on your plate, not a quest dispenser."
     )
-    if int(goal.get("stale", 0)) >= MAX_STALE:
+    delivered = goal.get("delivered") or []
+    if delivered:
+        out.append(
+            "IT HAS BEEN DONE. The player finished what you asked for: "
+            + "; ".join(f"“{t}”" for t in delivered)
+            + ". Decide honestly whether that completes what you were after. If it does, "
+            "say so and resolve_goal — then tell them what you turn to next, and ask for "
+            "it if you need their hands for it. Do not keep asking for a thing you have "
+            "already been given."
+        )
+    elif int(goal.get("stale", 0)) >= MAX_STALE:
         out.append(
             "You have been circling this for several conversations without getting "
             "anywhere. Press it THIS turn — ask outright for what you need."

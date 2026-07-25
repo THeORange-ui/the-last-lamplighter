@@ -17,10 +17,30 @@
         "bram": "He sends oil for the altar lamp and refuses to be thanked for it."
     },
     "bonds": [
-        {"kind": "room", "ref": "chapel", "weight": 3, "note": "This chapel. Somebody has to keep saying it or it stops being said."},
-        {"kind": "room", "ref": "undercroft", "weight": 2, "note": "The vault below. Sealed with the sigil, and I have never had cause to open it."},
-        {"kind": "item", "ref": "rite_book", "weight": 2, "note": "The book of rites. Most of it is prayers for patience. One page is genuinely useful."},
-        {"kind": "npc", "ref": "perrin", "weight": 2, "note": "Perrin. He stopped coming, and I never went after him. I think about that."}
+        {
+            "kind": "room",
+            "ref": "chapel",
+            "weight": 3,
+            "note": "This chapel. Somebody has to keep saying it or it stops being said."
+        },
+        {
+            "kind": "room",
+            "ref": "undercroft",
+            "weight": 2,
+            "note": "The vault below. Sealed with the sigil, and I have never had cause to open it."
+        },
+        {
+            "kind": "item",
+            "ref": "rite_book",
+            "weight": 2,
+            "note": "The book of rites. Most of it is prayers for patience. One page is genuinely useful."
+        },
+        {
+            "kind": "npc",
+            "ref": "perrin",
+            "weight": 2,
+            "note": "Perrin. He stopped coming, and I never went after him. I think about that."
+        }
     ],
     "knowledge": [
         "The lamplighters' sigil is a lamp inside a ring, cut wherever they sealed a store away",
@@ -32,9 +52,15 @@
         "Hessa believes the Gloam is owed the rites as much as any lamp is — that it is a cold thing nobody has ever kept — and has never said this to a living soul because of how it would sound"
     ],
     "affinity_seed": 10,
-    "inventory": ["oil_flask", "coin", "coin", "coin"],
+    "inventory": [
+        "oil_flask",
+        "coin",
+        "coin",
+        "coin"
+    ],
     "seed_memories": [
         "The altar lamp has been lit every day of my life and I intend to keep that record intact, whatever is happening up the ridge.",
         "Perrin used to sit in the back pew every night for a year, and then one night he didn't, and I never once went to his door to ask why."
-    ]
+    ],
+    "opening": "You are trimming the altar lamp, which you do every day whether anyone comes or not. Nobody has come in a week. There is a stranger in the doorway now and you would genuinely like the company."
 }

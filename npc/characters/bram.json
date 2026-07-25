@@ -27,17 +27,42 @@
         "gloam": "Whatever is up there took Cael. I have nothing else to say about it."
     },
     "bonds": [
-        {"kind": "item", "ref": "cael_coat", "weight": 3, "note": "Cael's coat. It's behind my bar, and it has been ready by the door for years."},
-        {"kind": "topic", "ref": "cael", "weight": 3, "note": "My sibling. Went up the ridge. I have not said that name out loud in a long time."},
-        {"kind": "room", "ref": "snow_cairn", "weight": 3, "note": "The cairn up the ridge. Cael's name is cut into it and I have never once gone to see it."},
-        {"kind": "room", "ref": "tavern", "weight": 2, "note": "This room. It's warm. That's the whole of what I have to offer anybody."},
-        {"kind": "npc", "ref": "tilda", "weight": 2, "note": "Tilda, out at the outfarm past the last lamp, on her own."}
+        {
+            "kind": "item",
+            "ref": "cael_coat",
+            "weight": 3,
+            "note": "Cael's coat. It's behind my bar, and it has been ready by the door for years."
+        },
+        {
+            "kind": "topic",
+            "ref": "cael",
+            "weight": 3,
+            "note": "My sibling. Went up the ridge. I have not said that name out loud in a long time."
+        },
+        {
+            "kind": "room",
+            "ref": "snow_cairn",
+            "weight": 3,
+            "note": "The cairn up the ridge. Cael's name is cut into it and I have never once gone to see it."
+        },
+        {
+            "kind": "room",
+            "ref": "tavern",
+            "weight": 2,
+            "note": "This room. It's warm. That's the whole of what I have to offer anybody."
+        },
+        {
+            "kind": "npc",
+            "ref": "tilda",
+            "weight": 2,
+            "note": "Tilda, out at the outfarm past the last lamp, on her own."
+        }
     ],
     "agenda": [
         {
-            "id": "keep_warm",
-            "want": "Keep the tavern warm and full while there is anyone left to sit in it",
-            "why": "As long as this room is warm, people have somewhere to be that isn't alone in the dark. It is the one thing I can actually do about any of this."
+            "id": "check_on_tilda",
+            "want": "Get someone out to the outfarm to see that Tilda is all right — she has not brought the cart in for eight days",
+            "why": "She is out past the last lamp on her own and she has never once missed a week. I cannot leave this bar and there is nobody else who would go."
         },
         {
             "id": "cael_fate",
@@ -56,9 +81,22 @@
         "Tilda is out at the farm past the last lamp on her own and will not be told. I send bread with whoever is going that way."
     ],
     "affinity_seed": -15,
-    "combat_stats": {"hp": 34, "attack": 7, "defense": 3, "resolve": 70},
-    "inventory": ["bread", "bread", "tavern_stew", "cael_coat",
-                  "coin", "coin", "coin", "coin"],
+    "combat_stats": {
+        "hp": 34,
+        "attack": 7,
+        "defense": 3,
+        "resolve": 70
+    },
+    "inventory": [
+        "bread",
+        "bread",
+        "tavern_stew",
+        "cael_coat",
+        "coin",
+        "coin",
+        "coin",
+        "coin"
+    ],
     "knowledge": [
         "The tavern is the last reliably warm place in town",
         "People who climb the ridge do not come back",
@@ -69,5 +107,6 @@
     "secrets": [
         "Bram keeps Cael's old coat behind the bar and cannot bring himself to burn it",
         "Bram would give almost anything to know what happened to Cael, but will not admit it"
-    ]
+    ],
+    "opening": "You are wiping down a bar nobody is sitting at, and you have been watching the door for eight days for a cart that has not come. Tilda runs the outfarm alone out past the last lamp, she brings her cart in every week without fail, and she has not. You cannot leave the tavern to go and look."
 }

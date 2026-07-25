@@ -17,9 +17,24 @@
         "bram": "Keeps a good fire. Won't sell me anything on credit any more, which is fair."
     },
     "bonds": [
-        {"kind": "room", "ref": "the_hollow", "weight": 3, "note": "The hollow. I got as far as the mouth of it and turned round and I'm not ashamed."},
-        {"kind": "npc", "ref": "sella", "weight": 2, "note": "Sella. She's been further than me and we both know it."},
-        {"kind": "room", "ref": "camp", "weight": 2, "note": "This waystation. Been meaning to move on for a season and a half."}
+        {
+            "kind": "room",
+            "ref": "the_hollow",
+            "weight": 3,
+            "note": "The hollow. I got as far as the mouth of it and turned round and I'm not ashamed."
+        },
+        {
+            "kind": "npc",
+            "ref": "sella",
+            "weight": 2,
+            "note": "Sella. She's been further than me and we both know it."
+        },
+        {
+            "kind": "room",
+            "ref": "camp",
+            "weight": 2,
+            "note": "This waystation. Been meaning to move on for a season and a half."
+        }
     ],
     "knowledge": [
         "There is a hollow off the windward side of the pass where the air is completely still",
@@ -31,8 +46,17 @@
         "Corvin never reached the pass at all — he turned back at the hollow both times, and the story has been told so often he half believes it himself"
     ],
     "affinity_seed": 0,
-    "inventory": ["scrap", "tonic", "coin", "coin", "coin", "coin", "coin"],
+    "inventory": [
+        "scrap",
+        "tonic",
+        "coin",
+        "coin",
+        "coin",
+        "coin",
+        "coin"
+    ],
     "seed_memories": [
         "I have told the pass story so many times I have to stop and think about which parts of it happened. The hollow happened. I stood at the mouth of it and something said my brother's name and I went down that mountain faster than I have ever moved."
-    ]
+    ],
+    "opening": "You are at the waystation fire part-way through telling the pass story to nobody, and a stranger has just walked up in time to hear the good part."
 }
