@@ -65,6 +65,10 @@ class WorldState:
     player: PlayerState
     npcs: dict[str, NPCRuntime] = field(default_factory=dict)
     lamps: dict[str, bool] = field(default_factory=dict)   # lamp_id -> lit?
+    # Mutable state for everything in engine/interact.py, keyed by interactable id
+    # (the definitions themselves are static, like the map). Lamps keep their own
+    # dict above because the HUD, the ridge gate and quest progress all read it.
+    interact_state: dict[str, dict] = field(default_factory=dict)
     quests: list = field(default_factory=list)              # list[Quest]
     flags: dict = field(default_factory=dict)               # arbitrary world flags
     world_facts: list[str] = field(default_factory=list)    # facts revealed in play

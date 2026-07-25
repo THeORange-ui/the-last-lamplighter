@@ -16,7 +16,7 @@ from engine.state import GroundItem, NPCRuntime, PlayerState, WorldState
 ROOT = Path(__file__).resolve().parent.parent
 SAVE_DIR = ROOT / "save"
 AUTOSAVE = "autosave"        # default slot for new games / quick continue
-SAVE_VERSION = 3
+SAVE_VERSION = 4
 
 
 def _sanitize(name: str) -> str:
@@ -94,6 +94,7 @@ def _world_to_dict(state: WorldState) -> dict:
                        "flags": n.flags}
                  for nid, n in state.npcs.items()},
         "lamps": dict(state.lamps),
+        "interact_state": {k: dict(v) for k, v in state.interact_state.items()},
         "quests": [_quest_to_dict(q) for q in state.quests],
         "flags": dict(state.flags),
         "world_facts": list(state.world_facts),
@@ -136,6 +137,7 @@ def _world_from_dict(data: dict) -> WorldState:
         player=player,
         npcs=npcs,
         lamps=data.get("lamps", {}),
+        interact_state=data.get("interact_state", {}),
         quests=[_quest_from_dict(q) for q in data.get("quests", [])],
         flags=data.get("flags", {}),
         world_facts=data.get("world_facts", []),

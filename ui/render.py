@@ -81,20 +81,21 @@ def draw_overworld(screen, world, rooms):
         _draw_glow(screen, (cx, cy), glow_r, T.HEARTH_GLOW, int(70 * strength) + 20)
         pygame.draw.circle(screen, T.HEARTH, (cx, cy), int(T.TILE * 0.42))
 
-    # lamps
-    for lamp_id, (lx, ly) in room.lamps.items():
-        cx, cy = lx * T.TILE + T.TILE // 2, ly * T.TILE + T.TILE // 2
-        lit = world.lamps.get(lamp_id, False)
-        if lit:
-            _draw_glow(screen, (cx, cy - 6), T.TILE, T.LAMP_GLOW, 60)
-        spr = sprites.lamp_surface(lit)
-        screen.blit(spr, (lx * T.TILE + (T.TILE - spr.get_width()) // 2,
-                          ly * T.TILE + (T.TILE - spr.get_height())))
-
-    # camp fixtures (campfire, chest)
-    for (fx, fy), kind in getattr(room, "fixtures", {}).items():
+    # interactables: lamps, then everything else (see engine/interact.py)
+    for inter in room.interactables:
+        if inter.hidden:
+            continue
+        fx, fy = inter.pos
         cx, cy = fx * T.TILE + T.TILE // 2, fy * T.TILE + T.TILE // 2
-        if kind == "campfire":
+        kind = inter.kind
+        if kind == "lamp":
+            lit = world.lamps.get(inter.id, False)
+            if lit:
+                _draw_glow(screen, (cx, cy - 6), T.TILE, T.LAMP_GLOW, 60)
+            spr = sprites.lamp_surface(lit)
+            screen.blit(spr, (fx * T.TILE + (T.TILE - spr.get_width()) // 2,
+                              fy * T.TILE + (T.TILE - spr.get_height())))
+        elif kind == "campfire":
             _draw_glow(screen, (cx, cy), int(T.TILE * 1.1), T.LAMP_GLOW, 80)
             pygame.draw.circle(screen, (86, 66, 54), (cx, cy + 7), int(T.TILE * 0.30))
             pygame.draw.circle(screen, T.HEARTH, (cx, cy), int(T.TILE * 0.22))

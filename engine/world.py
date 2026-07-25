@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .interact import Interactable, interactable_kinds
 from .items import ITEM_IDS
 from .quests import KnownEntities, Objective, Quest, Reward
 from .state import GroundItem, NPCRuntime, PlayerState, WorldState
@@ -18,9 +19,6 @@ from .state import GroundItem, NPCRuntime, PlayerState, WorldState
 TILE = 32
 GRID_W = 19
 GRID_H = 13
-
-# Items that exist in the world come from the item catalog (engine/items.py).
-INTERACTABLE_KINDS = {"lamp"}
 
 
 @dataclass
@@ -38,15 +36,15 @@ class Room:
     id: str
     name: str
     doors: list[Door] = field(default_factory=list)
-    lamps: dict[str, tuple[int, int]] = field(default_factory=dict)
+    # Everything usable in the room — lamps, fixtures, puzzles (see engine/interact.py).
+    interactables: list[Interactable] = field(default_factory=list)
     obstacles: set[tuple[int, int]] = field(default_factory=set)
     hearthlight: tuple[int, int] | None = None
     biome: str = "town"          # "town" | "snow" | "camp" — drives the room's palette
-    # Interactable fixtures keyed by tile: (x, y) -> kind ("campfire" | "chest").
-    fixtures: dict[tuple[int, int], str] = field(default_factory=dict)
 
     def blocked(self) -> set[tuple[int, int]]:
-        """Static blocked tiles: border walls (minus doors) + obstacles + fixtures."""
+        """Static blocked tiles: border walls (minus doors) + obstacles + solid
+        interactables (a lamp is walk-through; a chest is not)."""
         walls: set[tuple[int, int]] = set()
         for x in range(GRID_W):
             walls.add((x, 0))
@@ -57,7 +55,7 @@ class Room:
         for d in self.doors:
             walls.discard((d.x, d.y))
         walls |= self.obstacles
-        walls |= set(self.fixtures)
+        walls |= {i.pos for i in self.interactables if i.blocks}
         if self.hearthlight:
             walls.add(self.hearthlight)
         return walls
@@ -65,11 +63,31 @@ class Room:
     def door_at(self, x: int, y: int) -> Door | None:
         return next((d for d in self.doors if d.x == x and d.y == y), None)
 
-    def lamp_at(self, x: int, y: int) -> str | None:
-        return next((lid for lid, (lx, ly) in self.lamps.items() if (lx, ly) == (x, y)), None)
+    def interactable_at(self, x: int, y: int) -> Interactable | None:
+        return next((i for i in self.interactables if i.pos == (x, y)), None)
 
-    def fixture_at(self, x: int, y: int) -> str | None:
-        return self.fixtures.get((x, y))
+    def of_kind(self, kind: str) -> list[Interactable]:
+        return [i for i in self.interactables if i.kind == kind]
+
+    @property
+    def lamps(self) -> dict[str, tuple[int, int]]:
+        """lamp_id -> tile. The lamp registry in WorldState.lamps is seeded from this."""
+        return {i.id: i.pos for i in self.interactables if i.kind == "lamp"}
+
+
+def street_lamp(lamp_id: str, pos: tuple[int, int]) -> Interactable:
+    """A dead street lamp. Lighting one costs an oil flask — the prerequisite is
+    enforced here, in the engine, not left to an NPC to remember."""
+    return Interactable(
+        id=lamp_id, kind="lamp", pos=pos, name="dead lamp",
+        desc="A street lamp gone cold and dark. A flask of oil would wake it.",
+        hint="E: relight lamp",
+        requires={"item": "oil_flask", "unlit": True,
+                  "item_msg": "The lamp is dry. You need oil — perhaps Wren has some."},
+        effects=[{"light_lamp": True}],
+        use_msg="You pour the oil and coax the lamp back to light.",
+        blocks=False,          # you can walk over a lamp tile
+    )
 
 
 def build_rooms() -> dict[str, Room]:
@@ -83,13 +101,13 @@ def build_rooms() -> dict[str, Room]:
         id="square",
         name="Town Square",
         hearthlight=(9, 6),
-        lamps={"lamp_square": (4, 3)},
+        interactables=[street_lamp("lamp_square", (4, 3))],
         doors=[Door(x=R, y=MIDY, to_room="tavern", spawn=(1, MIDY))],
     )
     tavern = Room(
         id="tavern",
         name="The Ember Tavern",
-        lamps={"lamp_tavern": (14, 9)},
+        interactables=[street_lamp("lamp_tavern", (14, 9))],
         obstacles={(3, 3), (4, 3), (5, 3)},       # the bar counter
         doors=[
             Door(x=0, y=MIDY, to_room="square", spawn=(R - 1, MIDY)),
@@ -106,7 +124,7 @@ def build_rooms() -> dict[str, Room]:
     market = Room(
         id="market",
         name="The Dusk Market",
-        lamps={"lamp_market": (4, 3)},
+        interactables=[street_lamp("lamp_market", (4, 3))],
         obstacles={(12, 4), (13, 4), (14, 4),     # Sella's stall
                    (4, 8), (5, 8)},                # stacked crates
         doors=[
@@ -135,7 +153,21 @@ def build_rooms() -> dict[str, Room]:
         id="camp",
         name="The Waystation",
         biome="camp",
-        fixtures={(9, 6): "campfire", (6, 8): "chest"},
+        interactables=[
+            Interactable(
+                id="camp_fire", kind="campfire", pos=(9, 6), name="campfire",
+                desc="A banked fire ringed with stones — the only real warmth on the road.",
+                hint="E: rest by the fire",
+                effects=[{"heal_full": True}, {"advance_day": True}],
+                use_msg="You rest by the fire.",
+            ),
+            Interactable(
+                id="camp_chest", kind="chest", pos=(6, 8), name="supply chest",
+                desc="A dented iron chest, for stashing what you can't carry up the ridge.",
+                hint="E: open the chest",
+                effects=[{"open_panel": "storage"}],
+            ),
+        ],
         obstacles={(13, 4), (14, 4)},             # a lean-to
         doors=[
             Door(x=0, y=MIDY, to_room="road", spawn=(R - 1, MIDY)),
@@ -190,7 +222,8 @@ def known_entities(rooms: dict[str, Room], npc_ids) -> KnownEntities:
         rooms=set(rooms.keys()),
         npcs=set(npc_ids),
         items=set(ITEM_IDS),
-        interactable_kinds=set(INTERACTABLE_KINDS),
+        # Derived from the map, so new content widens what quests may target for free.
+        interactable_kinds=interactable_kinds(rooms),
     )
 
 

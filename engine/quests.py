@@ -169,10 +169,8 @@ def evaluate_progress(quest: Quest, state) -> int:
     if o.type == "reach":
         return o.count if state.player.room == o.target else 0
     if o.type == "interact":
-        # M1 only has lamps as an interactable kind.
-        if o.target == "lamp":
-            return min(state.lit_lamp_count(), o.count)
-        return quest.progress  # tracked incrementally by the engine
+        from engine.interact import used_count   # local: engine.interact imports items
+        return min(used_count(state, o.target), o.count)
     if o.type in ("fetch", "deliver"):
         return min(state.player.inventory.count(o.target), o.count)
     if o.type == "talk_to":

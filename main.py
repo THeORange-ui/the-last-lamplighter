@@ -11,12 +11,13 @@ import sys
 import pygame
 
 from engine.combat import combatant_from_npc, enemies_from_ids, make_combat
+from engine.interact import apply_interaction, is_live
 from engine.items import CURRENCY, display_name, use_item
 from engine.quests import refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
 from engine.state import GroundItem
-from engine.trade import is_vendor, restock_vendor
+from engine.trade import is_vendor
 from engine.world import NPC_SPAWNS
 from engine.world import ensure_world_complete, new_world, starter_quest
 from npc.memory import NPCMemory
@@ -203,12 +204,9 @@ class Game:
                     continue
                 if n.room == room.id and (n.x, n.y) == (tx, ty):
                     return ("npc", n.npc_id)
-            lamp = room.lamp_at(tx, ty)
-            if lamp:
-                return ("lamp", lamp)
-            fixture = room.fixture_at(tx, ty)
-            if fixture:
-                return ("fixture", fixture)
+            inter = room.interactable_at(tx, ty)
+            if inter is not None and not inter.hidden:
+                return ("use", inter)
             door = room.door_at(tx, ty)
             if door and door.locked:
                 return ("locked", door.locked_msg)
@@ -218,10 +216,9 @@ class Game:
         kind, ident = self.adjacent_targets()
         if kind == "npc":
             return f"E: talk to {character_name(ident)}"
-        if kind == "lamp":
-            return "E: relight lamp" if not self.world.lamps.get(ident) else ""
-        if kind == "fixture":
-            return {"campfire": "E: rest by the fire", "chest": "E: open the chest"}.get(ident, "")
+        if kind == "use":
+            # A used-up thing shows its spent hint, or nothing at all (a lit lamp).
+            return ident.hint if is_live(self.world, ident) else ident.spent_hint
         if kind == "locked":
             return "the ridge path is sealed"
         return ""
@@ -551,34 +548,26 @@ class Game:
         kind, ident = self.adjacent_targets()
         if kind == "npc":
             self.open_dialogue(ident)
-        elif kind == "lamp":
-            if not self.world.lamps.get(ident):
-                if not self.world.consume_item("oil_flask"):
-                    self.set_toast("The lamp is dry. You need oil — perhaps Wren has some.")
-                    return
-                self.world.lamps[ident] = True
-                room = self.rooms[self.world.player.room]
-                self.world.events.record("lamp_lit", f"You relit a lamp in {room.name}.")
-                self.set_toast("You pour the oil and coax the lamp back to light.")
-                self.on_quests_completed(refresh_and_complete(self.world, self.known))
-        elif kind == "fixture":
-            if ident == "campfire":
-                self.rest_at_camp()
-            elif ident == "chest":
-                self.storage_panel = StoragePanel(self.world)
-                self.storage_open = True
+        elif kind == "use":
+            self.use_interactable(ident)
         elif kind == "locked":
             self.set_toast(ident)
 
-    def rest_at_camp(self):
-        w = self.world
-        healed = w.heal_player(w.player.max_hp)
-        w.day += 1
-        for nid in self.world.npcs:
-            restock_vendor(w, nid, w.day)   # only vendors actually restock
-        w.events.record("rest", f"You rested at the Waystation. Day {w.day} begins.")
-        self.set_toast(f"You rest by the fire. Day {w.day}."
-                       + (f"  (+{healed} HP)" if healed else ""))
+    def use_interactable(self, inter):
+        """Every lamp, fire, chest and puzzle goes through here (engine/interact.py)."""
+        room = self.rooms[self.world.player.room]
+        result = apply_interaction(self.world, inter, room.name)
+        if result.message:
+            self.set_toast(result.message)
+        if not result.ok:
+            return
+        for kind, text in result.events:
+            self.world.events.record(kind, text)
+        if result.panel == "storage":
+            self.storage_panel = StoragePanel(self.world)
+            self.storage_open = True
+        if result.quests_dirty:
+            self.on_quests_completed(refresh_and_complete(self.world, self.known))
 
     def open_dialogue(self, npc_id):
         # Deterministic onboarding: Wren always has the starter quest to give,
