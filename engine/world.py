@@ -250,6 +250,10 @@ def ensure_world_complete(state: WorldState) -> None:
     for lid in [l for l in state.lamps if l not in valid_lamps]:
         del state.lamps[lid]
 
+    # Back-fill agendas for saves made before characters had them.
+    from npc.agenda import seed_all
+    seed_all(state)
+
     # Relocate the player / any NPC left in a room that no longer exists.
     if state.player.room not in rooms:
         state.player.room, state.player.x, state.player.y = "square", 9, 8
@@ -306,4 +310,6 @@ def new_world() -> tuple[WorldState, dict[str, Room], KnownEntities]:
     from engine.trade import restock_vendor          # seed the shop's opening stock
     for nid in npcs:
         restock_vendor(state, nid, state.day)
+    from npc.agenda import seed_all                  # everyone starts with something to do
+    seed_all(state)
     return state, rooms, known_entities(rooms, npc_ids)

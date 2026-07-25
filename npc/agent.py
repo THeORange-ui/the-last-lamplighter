@@ -18,6 +18,7 @@ from engine.items import catalog_for_prompt, display_name
 from engine.quests import find_check_back, refresh_and_complete
 from engine.state import affinity_label
 from llm.client import LLMError, complete_json
+from npc import agenda
 from npc.actions import action_catalog, apply_actions
 from npc.roster import character_name, load_character
 
@@ -55,6 +56,7 @@ class TurnState(TypedDict, total=False):
     completed_quests: list
     error: str
     check_back_id: str
+    goal_progress: str
 
 
 def _world_briefing(world, rooms, known, npc_id) -> str:
@@ -93,6 +95,35 @@ def _world_briefing(world, rooms, known, npc_id) -> str:
     return "\n".join(lines)
 
 
+def _voice_block(char) -> str:
+    """Sample lines beat adjectives for holding a voice steady."""
+    lines = [str(ln).strip() for ln in (char.get("voice") or []) if str(ln).strip()]
+    if not lines:
+        return ""
+    body = "\n".join(f'- "{ln}"' for ln in lines)
+    return ("\nHow you sound — your own turns of phrase. Catch the rhythm; do not reuse "
+            f"these lines verbatim:\n{body}\n")
+
+
+def _mind_block(memory) -> str:
+    """The character's own preoccupations — theirs before the player ever showed up."""
+    mind = memory.mind_as_prompt()
+    if not mind:
+        return ""
+    return ("\n# What is on your mind\n"
+            "Your own situation, carried in before this conversation. The player has not "
+            f"told you any of it:\n{mind}\n")
+
+
+def _relationships_block(char) -> str:
+    rel = char.get("relationships")
+    if not isinstance(rel, dict) or not rel:
+        return ""
+    body = "\n".join(f"- {character_name(nid)} ({nid}): {how}"
+                     for nid, how in rel.items())
+    return f"\nHow you see the others here:\n{body}\n"
+
+
 def _build_prompt(state: TurnState) -> tuple[str, str]:
     npc_id = state["npc_id"]
     world = state["world"]
@@ -105,20 +136,21 @@ You are role-playing a single character in a turn-based RPG. Stay fully in chara
 
 # Who you are
 Name: {char['name']} — {char.get('role', '')}
+{char.get('background', '')}
 Personality: {char.get('personality', '')}
 Speech style: {char.get('speech_style', '')}
 What drives you: {"; ".join(char.get('drives', []))}
 Your backstory: {char.get('backstory', '')}
 Things you know: {"; ".join(char.get('knowledge', []))}
 Secrets (reveal ONLY as trust grows; never dump them): {"; ".join(char.get('secrets', []))}
-
+{_voice_block(char)}{_relationships_block(char)}
 # How you feel about the player right now
 Affinity: {npc.affinity} out of 100 → {label}.
 {_DISPOSITION_GUIDANCE.get(label, "")}
-
+{_mind_block(state['memory'])}
 # What has happened between you before
 {state['memory'].as_prompt()}
-
+{agenda.prompt_block(world, npc_id)}
 # The world (only reference things listed here)
 {_world_briefing(world, state['rooms'], state['known'], npc_id)}
 
@@ -127,12 +159,16 @@ Affinity: {npc.affinity} out of 100 → {label}.
 
 # How to respond
 Reply with ONE JSON object and nothing else:
-{{"dialogue": "<what you SAY, in character, 1-4 sentences>", "actions": [ ... ]}}
+{{"dialogue": "<what you SAY, in character, 1-4 sentences>",
+  "actions": [ ... ],
+  "goal_progress": "none" | "advanced" | "resolved"}}
 Rules:
 - Speak only as {char['name']}. Do not narrate other characters or the scene.
 - Never invent people, places, or items that aren't in the briefing above.
 - Keep dialogue short and natural. Use actions sparingly and only when they fit.
 - Let your affinity and memories shape your tone and what you're willing to do.
+- "goal_progress" reports honestly on what you are trying to do: "advanced" if this
+  exchange moved it forward, "resolved" only if it is truly finished, else "none".
 """
     system += _commission_block(world, npc_id, char)
 
@@ -221,7 +257,8 @@ def reason(state: TurnState) -> TurnState:
     actions = out.get("actions", [])
     if not isinstance(actions, list):
         actions = []
-    return {"dialogue": dialogue, "raw_actions": actions}
+    return {"dialogue": dialogue, "raw_actions": actions,
+            "goal_progress": str(out.get("goal_progress", "")).strip().lower()}
 
 
 def act(state: TurnState) -> TurnState:
@@ -231,6 +268,15 @@ def act(state: TurnState) -> TurnState:
 
     # Mark that the player has spoken with this NPC (for talk_to objectives).
     world.npcs[npc_id].talked_to = True
+
+    # Fold in the NPC's own report on what it is trying to do. Judge resolution on the
+    # turns already banked, THEN count this one — so a beat can't be declared finished
+    # on the very turn it opened (agenda.MIN_TURNS), which would let a whole arc
+    # evaporate in a handful of greetings.
+    opened = agenda.note_progress(world, npc_id, state.get("goal_progress", ""))
+    agenda.tick_turn(world, npc_id)
+    if opened:
+        result.debug.append(f"agenda advanced to: {opened['want']}")
 
     # The player checked back in: complete the breadcrumb (the commissioner had its
     # turn above, whether it gave the next quest or wrapped the arc up).

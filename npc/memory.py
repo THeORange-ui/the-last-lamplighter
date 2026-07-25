@@ -1,12 +1,20 @@
-"""Per-NPC memory: a running summary + an append log of recent salient events.
+"""Per-NPC memory: pinned state of mind + a running summary + an append log.
 
 When the verbatim log grows past COMPACT_THRESHOLD, the oldest entries are folded
 into a natural-language `summary` (via an LLM summarizer passed in by the caller)
 and dropped from the verbatim tail. The prompt then shows the summary plus the
 most recent entries, keeping context small and cheap as play goes on.
 
-File format: {"summary": str, "entries": [str, ...]}. Older saves that were a bare
-JSON list of entries are still read correctly.
+`pinned` holds what the character *carries around* rather than what happened with
+the player: the seed memories from their character file (their inner state at the
+start of play) and anything later pinned as arc-critical. Compaction never touches
+it, so with PROMPT_ENTRIES = 12 and witnessing writing memories every few beats,
+the things that matter can't be buried. Pinned lines deliberately do NOT count
+toward `has_met()` — a character with a full head of their own worries has still
+never laid eyes on the player.
+
+File format: {"summary": str, "pinned": [str], "entries": [str], "seeded": bool}.
+Older formats (a bare JSON list, or a dict without pinned/seeded) still read.
 """
 from __future__ import annotations
 
@@ -31,8 +39,11 @@ class NPCMemory:
         self.npc_id = npc_id
         self.path = MEMORY_DIR / f"{npc_id}.json"
         self.summary: str = ""
+        self.pinned: list[str] = []
         self.entries: list[str] = []
+        self.seeded: bool = False
         self._load()
+        self._seed_from_character()
         NPCMemory._LIVE[npc_id] = self
 
     @classmethod
@@ -54,13 +65,31 @@ class NPCMemory:
             self.entries = data
         elif isinstance(data, dict):
             self.summary = data.get("summary", "")
+            self.pinned = data.get("pinned", [])
             self.entries = data.get("entries", [])
+            self.seeded = bool(data.get("seeded", False))
+
+    def _seed_from_character(self) -> None:
+        """Pin the character file's `seed_memories` — their state of mind at the start
+        of play. Idempotent: the `seeded` marker means this runs once per game."""
+        if self.seeded:
+            return
+        self.seeded = True
+        try:
+            from npc.roster import load_character   # local: keeps the import cheap
+            lines = load_character(self.npc_id).get("seed_memories", []) or []
+        except KeyError:
+            lines = []
+        fresh = [str(ln).strip() for ln in lines if str(ln).strip()]
+        if fresh:
+            self.pinned = fresh + self.pinned
+            self._save()
 
     def _save(self) -> None:
         MEMORY_DIR.mkdir(exist_ok=True)
-        self.path.write_text(
-            json.dumps({"summary": self.summary, "entries": self.entries}, indent=2)
-        )
+        self.path.write_text(json.dumps(
+            {"summary": self.summary, "pinned": self.pinned,
+             "entries": self.entries, "seeded": self.seeded}, indent=2))
 
     def remember(self, note: str) -> None:
         note = note.strip()
@@ -68,11 +97,26 @@ class NPCMemory:
             self.entries.append(note)
             self._save()
 
+    def pin(self, note: str) -> None:
+        """Keep something permanently in mind — compaction can never drop it."""
+        note = note.strip()
+        if note and note not in self.pinned:
+            self.pinned.append(note)
+            self._save()
+
     def recent(self, n: int = PROMPT_ENTRIES) -> list[str]:
         return self.entries[-n:]
 
     def has_met(self) -> bool:
+        """Pinned lines are the character's own state of mind, not shared history, so
+        they must not make a first meeting look like a reunion."""
         return bool(self.entries or self.summary)
+
+    def mind_as_prompt(self) -> str:
+        """The pinned block: what this character is carrying around, unprompted."""
+        if not self.pinned:
+            return ""
+        return "\n".join(f"- {p}" for p in self.pinned)
 
     def maybe_compact(self, summarizer) -> bool:
         """If the log is long, summarize the oldest entries into `summary`.
@@ -129,7 +173,9 @@ class NPCMemory:
             if isinstance(data, list):
                 data = {"summary": "", "entries": data}
             out[f.stem] = {"summary": data.get("summary", ""),
-                           "entries": data.get("entries", [])}
+                           "pinned": data.get("pinned", []),
+                           "entries": data.get("entries", []),
+                           "seeded": bool(data.get("seeded", False))}
         return out
 
     @staticmethod
@@ -139,5 +185,7 @@ class NPCMemory:
         MEMORY_DIR.mkdir(exist_ok=True)
         for npc_id, data in (memories or {}).items():
             payload = {"summary": data.get("summary", ""),
-                       "entries": data.get("entries", [])}
+                       "pinned": data.get("pinned", []),
+                       "entries": data.get("entries", []),
+                       "seeded": bool(data.get("seeded", False))}
             (MEMORY_DIR / f"{npc_id}.json").write_text(json.dumps(payload, indent=2))

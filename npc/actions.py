@@ -47,6 +47,16 @@ ACTIONS: dict[str, str] = {
         "    Reading tells you what it says (you will remember it), and food is eaten up.\n"
         "    Use this when the player hands you something you'd want to look at."
     ),
+    "set_goal": (
+        '- {"type": "set_goal", "want": "<what you now mean to do>", "why": "<why it matters>"}\n'
+        "    Change what you are working toward. Use it when your situation has shifted and\n"
+        "    the thing you were pursuing is no longer the thing you care about — or when the\n"
+        "    old one is done and you know what comes next. One goal at a time."
+    ),
+    "resolve_goal": (
+        '- {"type": "resolve_goal"}\n'
+        "    Declare what you were trying to do FINISHED. Only when it genuinely is."
+    ),
     "tell": (
         '- {"type": "tell", "targets": ["<npc id>", ...], "info": "<what you pass on>"}\n'
         "    Pass word to other people you know — they will remember what you told them,\n"
@@ -85,7 +95,8 @@ ACTIONS: dict[str, str] = {
 # NPC can only colour a scene and share a fact.
 ACTION_SETS: dict[str, list[str]] = {
     "main": ["adjust_affinity", "give_quest", "offer_item", "reveal_fact", "use_item",
-             "tell", "move_to", "join_party", "leave_party", "attack", "end_dialogue"],
+             "set_goal", "resolve_goal", "tell", "move_to", "join_party", "leave_party",
+             "attack", "end_dialogue"],
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "end_dialogue"],
     "minor": ["adjust_affinity", "reveal_fact", "use_item", "end_dialogue"],
 }
@@ -230,6 +241,25 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 result.effects.append(f"{name} {verb} the {label}.")
             else:
                 result.effects.append(f"{name} turns the {label} over in their hands.")
+
+        elif atype == "set_goal":
+            from npc import agenda
+            item = agenda.set_goal(state, npc_id, raw.get("want", ""), raw.get("why", ""))
+            if item is None:
+                result.debug.append("set_goal with no usable 'want'")
+                continue
+            result.debug.append(f"{npc_id} now wants: {item['want']}")
+
+        elif atype == "resolve_goal":
+            from npc import agenda
+            if not agenda.can_resolve(state.npcs[npc_id]):
+                # Too soon (or nothing open) — an arc shouldn't collapse in one turn.
+                result.debug.append(f"{npc_id} tried to resolve a goal too early")
+                continue
+            nxt = agenda.advance_agenda(state, npc_id)
+            result.debug.append(
+                f"{npc_id} resolved a goal; next: {nxt['want']}" if nxt
+                else f"{npc_id} resolved their last authored goal")
 
         elif atype == "tell":
             from npc.memory import NPCMemory

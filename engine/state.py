@@ -36,6 +36,9 @@ class NPCRuntime:
     talked_to: bool = False
     inventory: list[str] = field(default_factory=list)   # item ids this NPC holds
     flags: dict = field(default_factory=dict)
+    # What this character is trying to do — an arc skeleton from their character
+    # file, one beat open at a time. See npc/agenda.py.
+    agenda: list[dict] = field(default_factory=list)
 
     @property
     def disposition(self) -> str:

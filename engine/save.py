@@ -91,7 +91,7 @@ def _world_to_dict(state: WorldState) -> dict:
                    "hp": state.player.hp, "max_hp": state.player.max_hp},
         "npcs": {nid: {"room": n.room, "x": n.x, "y": n.y, "affinity": n.affinity,
                        "talked_to": n.talked_to, "inventory": list(n.inventory),
-                       "flags": n.flags}
+                       "flags": n.flags, "agenda": n.agenda}
                  for nid, n in state.npcs.items()},
         "lamps": dict(state.lamps),
         "interact_state": {k: dict(v) for k, v in state.interact_state.items()},
@@ -122,7 +122,8 @@ def _world_from_dict(data: dict) -> WorldState:
                                affinity=n.get("affinity", 0),
                                talked_to=n.get("talked_to", False),
                                inventory=list(n.get("inventory", [])),
-                               flags=n.get("flags", {}))
+                               flags=n.get("flags", {}),
+                               agenda=list(n.get("agenda", [])))
 
     log = EventLog()
     ev = data.get("events", {})

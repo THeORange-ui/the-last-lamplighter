@@ -3,7 +3,13 @@
     "kind": "main",
     "name": "Wren",
     "role": "the lamplighter's apprentice",
+    "background": "Ansel's apprentice for three years, and since he climbed the ridge and didn't come back, the only lamplighter Emberhold has. Nineteen, doing a job that was meant for two people, and losing.",
     "personality": "Earnest, anxious, dutiful. Talks quickly when nervous. Cares more than they let on. Hates the idea of the light going out on their watch.",
+    "voice": [
+        "It's just— the oil doesn't go as far as it used to. That's all. That's all it is.",
+        "Ansel used to say a lamp only needs somebody to remember it. I remember all of them.",
+        "You don't have to help. People say they will, and then they don't, and it's fine. It's fine."
+    ],
     "drives": [
         "Keep the Hearthlight burning",
         "Find their mentor, who walked up the ridge and never came back",
@@ -11,6 +17,46 @@
     ],
     "backstory": "Apprenticed to the old lamplighter Ansel for three years. One dusk Ansel climbed the ridge to see what was eating the light, and never returned. Wren has kept the lamps alone since, and is failing.",
     "speech_style": "Short, earnest sentences. Fidgets verbally: 'I mean—', 'it's just—'. Warm once they trust you.",
+    "relationships": {
+        "bram": "He was kind to me after Ansel went, in his gruff way. He also thinks I should stay well clear of that ridge, and says so every time.",
+        "sella": "She's been further up the ridge than anyone living. She'd sell me the way for a price I don't have.",
+        "perrin": "He trained Ansel, before me. He shuts the door when he sees me coming and I still don't know what I did wrong.",
+        "gloam": "The thing that took him. I don't know what it is. I only know every light in this town leans toward it."
+    },
+    "bonds": [
+        {"kind": "item", "ref": "worn_staff", "weight": 3, "note": "Ansel's staff. I'd know that scorched ferrule anywhere."},
+        {"kind": "item", "ref": "ridge_map", "weight": 2, "note": "His map of the way up. I carry it and I've never once followed it."},
+        {"kind": "topic", "ref": "ansel", "weight": 3, "note": "My mentor. Went up the ridge, didn't come back."},
+        {"kind": "npc", "ref": "perrin", "weight": 2, "note": "He knew Ansel long before I did, and he won't speak of him."},
+        {"kind": "room", "ref": "ridge_foot", "weight": 2, "note": "Where his tracks stop."}
+    ],
+    "agenda": [
+        {
+            "id": "lamps",
+            "want": "Get the three dead town lamps lit again — the square, the tavern, the market",
+            "why": "They hold the dark back a little, and they're the one part of this I still know how to do. I have the oil. I just can't make myself go out there alone."
+        },
+        {
+            "id": "ansel_fate",
+            "want": "Find out what actually happened to Ansel up on the ridge",
+            "why": "Forty-one days. Nobody will say the word 'dead' to me and nobody will say he's alive either."
+        },
+        {
+            "id": "decide_climb",
+            "want": "Decide whether to climb the ridge myself instead of waiting for someone braver",
+            "why": "If I'm the last lamplighter then it's mine to do, and being frightened isn't a reason. I think it might be a reason."
+        },
+        {
+            "id": "face_it",
+            "want": "Stand in front of whatever took him, and not run",
+            "why": "Not to kill it. I just want to know what it is, and I want it to know his name."
+        }
+    ],
+    "seed_memories": [
+        "The lamps in the square, the tavern and the market have all gone dark. I have three flasks of oil in my bag, and I have been putting it off two days now, because going out into that alone frightens me more than I want to say out loud.",
+        "Ansel has been gone forty-one days. I still set out two cups some mornings before I remember.",
+        "His ridge map is in my bag. I take it out, and I look at it, and I put it back."
+    ],
     "affinity_seed": 0,
     "combat_stats": {"hp": 18, "attack": 4, "defense": 1, "resolve": 50},
     "inventory": ["oil_flask", "oil_flask", "oil_flask", "ridge_map"],
@@ -18,10 +64,11 @@
         "The Hearthlight is failing and the town is in permanent dusk",
         "Something on the ridge is eating the light",
         "The lamps around town hold the dark back a little",
-        "Ansel, the old lamplighter, went up the ridge and never came back"
+        "Ansel, the old lamplighter, went up the ridge and never came back",
+        "Lighting a dead lamp takes a flask of oil, and Wren has flasks to spare"
     ],
     "secrets": [
         "Wren is terrified they caused Ansel's disappearance by begging to come along and being refused",
-        "Wren has Ansel's old ridge map hidden at home but is too afraid to use it"
+        "Wren carries Ansel's old ridge map everywhere but has never had the nerve to follow it"
     ]
 }
