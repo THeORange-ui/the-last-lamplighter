@@ -108,5 +108,6 @@
         "Bram keeps Cael's old coat behind the bar and cannot bring himself to burn it",
         "Bram would give almost anything to know what happened to Cael, but will not admit it"
     ],
-    "opening": "You are wiping down a bar nobody is sitting at, and you have been watching the door for eight days for a cart that has not come. Tilda runs the outfarm alone out past the last lamp, she brings her cart in every week without fail, and she has not. You cannot leave the tavern to go and look."
+    "opening": "You are wiping down a bar nobody is sitting at, and you have been watching the door for eight days for a cart that has not come. Tilda runs the outfarm alone out past the last lamp, she brings her cart in every week without fail, and she has not. You cannot leave the tavern to go and look.",
+    "roam": 0
 }

@@ -62,5 +62,6 @@
         "The altar lamp has been lit every day of my life and I intend to keep that record intact, whatever is happening up the ridge.",
         "Perrin used to sit in the back pew every night for a year, and then one night he didn't, and I never once went to his door to ask why."
     ],
-    "opening": "You are trimming the altar lamp, which you do every day whether anyone comes or not. Nobody has come in a week. There is a stranger in the doorway now and you would genuinely like the company."
+    "opening": "You are trimming the altar lamp, which you do every day whether anyone comes or not. Nobody has come in a week. There is a stranger in the doorway now and you would genuinely like the company.",
+    "roam": 0
 }

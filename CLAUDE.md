@@ -368,3 +368,25 @@ first, then content, then the ensemble — **stop for a play session after each 
     short call each, authored fallback per stage on `LLMError`), then returns to free play.
 
 Confirm scope with the user before starting new major work.
+
+## Playtest findings worth not re-learning
+
+From an outside player's session (not the developer's), all fixed:
+
+- **`complete_quest` was uncallable.** The action takes a `quest_id`, but a character
+  was only ever shown quest *titles* — so a `judged` quest could never be closed except
+  by guessing the slug. `_world_briefing` now lists the ids of quests **this** NPC gave.
+  Any action taking an id needs the id in the briefing; check that when adding one.
+- **`judged` gets over-used.** An LLM reaches for the expressive option, so "go and see
+  Tilda" came back as `judged` rather than `talk_to`. The prompt now says concrete types
+  complete by themselves and `judged` is a last resort that hangs forever if misused.
+- **A `judged` quest must tell the player how it ends** — `build_quest` appends "Tell
+  &lt;giver&gt; about it when you're done", because doing the thing produces no feedback.
+- **Memory compaction confused the NPC with the player.** Bram's summary had *him*
+  relighting the lamps; Wren's had her "present when I finished finding the lamplighter's
+  apprentice" — she is the apprentice. `summarize_memory` now states plainly that "you" is
+  the character and "the player" is someone else, and quest-completion witnessing excludes
+  the quest's target as well as its giver.
+- **Ambient drift broke people's premises.** Unleashed, Tilda averaged 3.1 doors from the
+  farm she cannot leave. Characters now have a `roam` radius in their file (0 = stays put)
+  and never wander into `PRIVATE_ROOMS`.

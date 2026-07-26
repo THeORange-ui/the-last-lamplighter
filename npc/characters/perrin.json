@@ -115,5 +115,6 @@
         "He thinks the only way to stop the Gloam is to answer it, not fight it — and he is too much a coward to go himself",
         "He has never forgiven himself for letting Ansel go up the ridge in his place"
     ],
-    "opening": "Someone has knocked at your door. Ansel's apprentice has been coming by every few days for weeks — standing there, asking about the old craft, about the night the light went out — and you have shut the door on them every time and stood behind it afterwards. You want it to stop before they get it into their head to go up that mountain the way Ansel did."
+    "opening": "Someone has knocked at your door. Ansel's apprentice has been coming by every few days for weeks — standing there, asking about the old craft, about the night the light went out — and you have shut the door on them every time and stood behind it afterwards. You want it to stop before they get it into their head to go up that mountain the way Ansel did.",
+    "roam": 1
 }

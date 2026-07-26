@@ -106,5 +106,6 @@
         "Wren is terrified they caused Ansel's disappearance by begging to come along and being refused",
         "Wren carries Ansel's old ridge map everywhere but has never had the nerve to follow it"
     ],
-    "opening": "You are standing under a dead lamp in the square with three flasks of oil in your bag, working up to going out and lighting them, and not managing it. It is the third evening you have stood here doing this."
+    "opening": "You are standing under a dead lamp in the square with three flasks of oil in your bag, working up to going out and lighting them, and not managing it. It is the third evening you have stood here doing this.",
+    "roam": 2
 }

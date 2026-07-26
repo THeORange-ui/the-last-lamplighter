@@ -57,5 +57,6 @@
         "Nobody says 'the ridge' out loud any more. They say 'up there'. I've been counting."
     ],
     "opening": "You are hanging over the lip of the well trying to reach something that is very much not reachable, and you are not supposed to be here, and someone has just walked into the yard behind you.",
-    "gossip": true
+    "gossip": true,
+    "roam": 1
 }

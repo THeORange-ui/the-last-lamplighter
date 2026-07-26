@@ -30,6 +30,11 @@ GRID_H = 13
 # A character reaches the ridge by walking it *with* the player, as a companion.
 RIDGE_ROOMS = {"ridge_foot", "ridge_pass", "ridge_summit"}
 
+# Somebody's house, a locked store, a sealed vault. People don't drift into these on
+# a stroll — only whoever lives there belongs. In a playtest an ex-hermit and a
+# scavenger both ended up loitering in the undercroft, which is behind a sigil door.
+PRIVATE_ROOMS = {"home", "cellar", "undercroft"}
+
 
 @dataclass
 class Door:

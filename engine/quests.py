@@ -144,6 +144,15 @@ def build_quest(data: dict, giver: str, known: "KnownEntities",
     if rtype == "item" and rvalue not in known.items:
         raise QuestValidationError(f"reward item {rvalue!r} does not exist")
 
+    if otype == "judged":
+        # Nothing in the world closes this one, so the player has to be told that
+        # coming back and saying so IS the completion — otherwise they do the thing,
+        # nothing happens, and the note sits there looking broken.
+        from npc.roster import character_name
+        back = f"Tell {character_name(giver)} about it when you're done."
+        if back not in description:
+            description = f"{description} {back}".strip()
+
     quest_id = _slug(title)
     return Quest(
         id=quest_id,
@@ -252,8 +261,12 @@ def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
                 room=state.player.room, salience=BEAT,
                 first_person=f'You were there when the player finished "{q.title}".',
                 # The giver gets their own, better-put line (npc/agent.py act, and
-                # main.on_quests_completed) — don't hand them a second copy.
-                exclude=(q.giver,))
+                # main.on_quests_completed) — don't hand them a second copy. Nor the
+                # person the quest was *about*: "you were there when the player finished
+                # finding the lamplighter's apprentice" is a strange thing for the
+                # apprentice to remember, and compaction turned it into Wren believing
+                # she had gone and found herself.
+                exclude=(q.giver, q.objective.target, q.objective.npc or ""))
             _activate_followups(q, state, known)
             just_done.append(q)
             if on_complete:

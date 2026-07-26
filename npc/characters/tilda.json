@@ -58,5 +58,6 @@
     "seed_memories": [
         "I lost mother's locket somewhere on the market run. Tin, no value to anyone but me. I've walked that road twice looking and I'm not walking it a third time in this dark."
     ],
-    "opening": "You are shifting feed on your own in a yard with no lamp, and what is actually eating at you is the locket — your mother's, tin, worth nothing to anyone else — lost somewhere on the market run. You have walked that road twice looking for it and you will not walk it a third time in this dark, and you would ask a stranger before you would ask Bram."
+    "opening": "You are shifting feed on your own in a yard with no lamp, and what is actually eating at you is the locket — your mother's, tin, worth nothing to anyone else — lost somewhere on the market run. You have walked that road twice looking for it and you will not walk it a third time in this dark, and you would ask a stranger before you would ask Bram.",
+    "roam": 0
 }

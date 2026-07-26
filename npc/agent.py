@@ -137,6 +137,19 @@ def _world_briefing(world, rooms, known, npc_id) -> str:
             "Active quests the player already has: "
             + "; ".join(f"“{q.title}”" for q in world.active_quests())
         )
+    # Your OWN open tasks, with their ids. Without these `complete_quest` is
+    # uncallable — it takes a quest_id, and a character who has only ever been shown
+    # titles has to guess one. In play that left a `judged` quest permanently open
+    # even after the player came back and reported it done.
+    mine = [q for q in world.active_quests() if q.giver == npc_id]
+    if mine:
+        lines.append(
+            "Tasks YOU set them, with the id to use with complete_quest:\n"
+            + "\n".join(
+                f"- id={q.id} — “{q.title}”"
+                + (f"  [you decide when this is done: {q.objective.target}]"
+                   if q.objective.type == "judged" else "")
+                for q in mine))
     if world.world_facts:
         lines.append("Facts already revealed in play: " + " | ".join(world.world_facts))
     happenings = world.events.public_briefing()
@@ -482,11 +495,17 @@ def summarize_memory(npc_id, prior_summary, old_entries):
     prior = prior_summary or "(nothing yet)"
     log = "\n".join(f"- {e}" for e in old_entries)
     system = (
-        f"You maintain {char['name']}'s private memory of a person they have met. "
-        f"Rewrite their memory as a compact first-person summary (2-4 sentences) "
+        f"You maintain {char['name']}'s private memory of the player — an outsider who "
+        f"arrived in town. Rewrite it as a compact first-person summary (2-4 sentences) "
         f"capturing the relationship, key facts, promises made, and how {char['name']} "
         f"feels about them. Merge the earlier summary with the newer events; keep only "
-        f"what would matter later. Reply as JSON: {{\"summary\": \"...\"}}."
+        f"what would matter later.\n"
+        f"CRITICAL — do not mix up who did what. In the notes, 'you' is {char['name']} "
+        f"and 'the player' is the other person. Deeds the PLAYER did stay the player's: "
+        f"if a note says you watched them light a lamp, then THEY lit it, not you. "
+        f"Never take on their errands, their quests or their possessions as your own, "
+        f"and never describe yourself as someone you merely met.\n"
+        f"Reply as JSON: {{\"summary\": \"...\"}}."
     )
     user = f"Earlier summary:\n{prior}\n\nNewer events to fold in:\n{log}"
     try:

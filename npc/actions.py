@@ -31,11 +31,15 @@ ACTIONS: dict[str, str] = {
         '       "objective": {"type": "reach|interact|fetch|deliver|talk_to|judged",\n'
         '                     "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}\n'
-        "    Offer a task. The target MUST be a real entity listed in the world briefing —\n"
-        "    EXCEPT for \"judged\", where the target is instead a short plain-English\n"
-        "    description of what would satisfy you. Use \"judged\" when what you want can't\n"
-        "    be counted or stood on (\"put my mind at rest about Ansel\"): nothing in the\n"
-        "    world can decide it, so YOU decide, later, with complete_quest."
+        "    Offer a task. The target MUST be a real entity listed in the world briefing.\n"
+        "    PREFER a concrete type — if what you want is 'go and see Tilda', that is\n"
+        "    talk_to tilda; if it is 'get to the ridge', that is reach. Those complete by\n"
+        "    themselves the moment the player does the thing.\n"
+        "    \"judged\" is a LAST RESORT for something no counter could ever settle (\"put my\n"
+        "    mind at rest about Ansel\"). Its target is a plain-English criterion, nothing\n"
+        "    in the world can satisfy it, and it stays open until YOU close it with\n"
+        "    complete_quest — so if you use it for an errand that could have been talk_to,\n"
+        "    the player does the errand and the task hangs there forever."
     ),
     "request_help": (
         '- {"type": "request_help", "quest": {\n'
