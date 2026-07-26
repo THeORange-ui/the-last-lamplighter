@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from engine.items import catalog_for_prompt, display_name
+from engine import pacing
 from engine.quests import find_check_back, refresh_and_complete
 from engine.state import affinity_label
 from llm.client import LLMError, complete_json
@@ -202,7 +203,7 @@ Affinity: {npc.affinity} out of 100 → {label}.
 {_mind_block(state['memory'])}
 # What has happened between you before
 {state['memory'].as_prompt()}
-{agenda.prompt_block(world, npc_id)}
+{agenda.prompt_block(world, npc_id)}{pacing.prompt_block(world, npc_id)}
 # The world (only reference things listed here)
 {_world_briefing(world, state['rooms'], state['known'], npc_id)}
 
@@ -293,15 +294,18 @@ Rules:
     cb = find_check_back(world, npc_id)
     parent = world.quest_by_id(cb.parent) if cb and cb.parent else None
     if cb is not None:
-        done = f"“{parent.title}”" if parent else "the task you set them"
-        lead = ("you were with them when they finished" if world.in_party(npc_id)
-                else "the player has come back to you after completing")
-        user += (
-            f"\n\nIMPORTANT: {lead} {done}. React "
-            "to that, and this turn decide their next step — give the follow-up quest now "
-            "(give_quest), or, if their path with you is truly done, close it out warmly "
-            "with no new quest."
-        )
+        if cb.parent is None:
+            user += ("\n\nIMPORTANT: they have come looking for you because word reached "
+                     "them that something was on your mind. Say what it is.")
+        else:
+            done = f"“{parent.title}”" if parent else "the task you set them"
+            lead = ("you were with them when they finished" if world.in_party(npc_id)
+                    else "the player has come back to you after completing")
+            user += (
+                f"\n\nIMPORTANT: {lead} {done}. React to that. Then either ask for the "
+                "next step, or — more often the honest answer — thank them and leave it "
+                "there for now without asking for anything else."
+            )
     return system, user
 
 
@@ -311,20 +315,47 @@ def _commission_block(world, npc_id, char) -> str:
     cb = find_check_back(world, npc_id)
     if cb is None:
         return ""
-    parent = world.quest_by_id(cb.parent) if cb.parent else None
+
+    # A breadcrumb with no parent is a heartbeat (engine/pacing.py): the player came
+    # by because word reached them, not because they finished anything for you.
+    if cb.parent is None:
+        if not world.npcs[npc_id].talked_to:
+            return ""            # let the first-meeting `opening` do the work instead
+        return (
+            "\n# They have come to see you\n"
+            "The player has sought you out — word got round that something was on your "
+            "mind. Nothing of yours has just been finished; this is simply them turning "
+            "up. Say what has actually been bothering you, in your own way. Ask for help "
+            "with it only if you need their hands for it and their plate allows."
+        )
+
+    parent = world.quest_by_id(cb.parent)
     done = f"“{parent.title}”" if parent else "the task you set them"
     # If you were travelling with them, they did not "come back" to you — you watched
     # the whole thing happen from a step away.
     setup = (f"{done} is finished, and you were right there beside them for it."
              if world.in_party(npc_id) else
              f"The player finished {done} and has come back to you.")
+    # How hard to lean on restraint depends on the player's load and on whether this
+    # arc is running away from everyone else's (engine/pacing.py).
+    lean = {
+        "hold": "Right now (b) is almost certainly the honest answer — they have "
+                "plenty on, or you have already had more than your share of their time.",
+        "easy": "Weigh (a) against (b) honestly; don't ask unless it matters.",
+        "free": "They are not carrying much and your own thread has not been hogging "
+                "them, so (a) is perfectly reasonable if there is a real next step.",
+    }[pacing.restraint(world, npc_id)]
     return (
         "\n# A thread to continue\n"
-        f"{setup} This turn, decide the NEXT "
-        "step of their path with you: either give a follow-up quest (a give_quest that builds "
-        "naturally on what just happened — and it may itself lead somewhere further), OR, if "
-        "their story with you has reached its end, acknowledge that warmly and give no new "
-        "quest. Do not repeat a quest they have already done."
+        f"{setup} React to it properly first — they did the thing you asked. Then pick "
+        "ONE of three, honestly:\n"
+        "  (a) ask for the next step, if there genuinely is one;\n"
+        "  (b) leave it there for now — thank them, and let them go. This does NOT end "
+        "your story together; you simply have nothing more to ask this minute;\n"
+        "  (c) if your story with them has actually reached its end, say so warmly.\n"
+        f"{lean}\n"
+        "Do not repeat a quest they have already done, and do not invent an errand to "
+        "keep them near you."
     )
 
 
@@ -363,8 +394,10 @@ def act(state: TurnState) -> TurnState:
     npc_id = state["npc_id"]
     result = apply_actions(world, npc_id, state.get("raw_actions", []), known, rooms)
 
-    # Mark that the player has spoken with this NPC (for talk_to objectives).
+    # Mark that the player has spoken with this NPC (for talk_to objectives), and
+    # when — the heartbeat uses it to find who's being neglected.
     world.npcs[npc_id].talked_to = True
+    pacing.note_talked(world, npc_id)
 
     # Fold in the NPC's own report on what it is trying to do. Judge resolution on the
     # turns already banked, THEN count this one — so a beat can't be declared finished

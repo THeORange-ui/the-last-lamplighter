@@ -86,9 +86,13 @@ Three layers enforce this, and changes usually touch all three:
    objective type `CHECK_BACK` — engine-created, never LLM-proposed, never auto-completed by
    progress). When the player talks to that giver, the **commissioner** (the giver's own
    dialogue agent — `_commission_block` + the per-turn nudge, both keyed off
-   `find_check_back`) authors the next quest (or concludes the arc), and `agent.act` marks the
-   breadcrumb complete. `refresh_and_complete` needs `known` to build concrete children — pass
-   it (call sites in `main.py`/`agent.act` do).
+   `find_check_back`) picks one of **three** — ask for the next step, *leave it there for now*,
+   or close the arc — and `agent.act` marks the breadcrumb complete. The middle option exists
+   because a two-way choice made every completed quest spawn another, and one thread ate the
+   game; how hard the prompt leans on it comes from `pacing.restraint()`.
+   A breadcrumb with **`parent is None`** is a heartbeat (`engine/pacing.py`), not a follow-up,
+   and gets its own framing. `refresh_and_complete` needs `known` to build concrete children —
+   pass it (call sites in `main.py`/`agent.act` do).
 3. **`engine/items.py`** — the item catalog is a **closed set**. NPCs can only `offer_item`
    things actually in their own `inventory`; the LLM cannot invent items.
 
@@ -112,6 +116,24 @@ Three layers enforce this, and changes usually touch all three:
   `{"unlit": True}`. `effects` are single-key dicts (`light_lamp`, `heal_full`, `advance_day`,
   `open_panel`, `set_flag`, `add_fact`, `give_item`). `apply_interaction()` is the single entry
   point `main.use_interactable` calls. Adding world content is **data, not code**.
+- `pacing.py` — **how fast the world hands you things, and to whom.** In play one character's
+  line ran away with the whole game, because starting anything only ever happened in
+  conversation and the player was always in a conversation with her. Two mechanisms pull
+  against that:
+  - the **tick** — a composite progress counter (quests finished, nights rested, rooms newly
+    seen), not elapsed time, so pacing tracks what the player *does*;
+  - the **heartbeat** — on a tick, if fewer than `THREAD_CAP` (4) threads are open, the world
+    drops a "Check on X" breadcrumb for a *neglected* character. It's a `CHECK_BACK` quest
+    with **no parent**, which is how `agent._commission_block` tells it from a follow-up.
+    Creating one costs **no LLM call**; the call happens if the player goes and knocks.
+    Candidates are ordered strangers-first and least-nudged-first, so the cast is introduced
+    as a drip and nobody gets pestered twice; anyone the player is *already* being pointed at
+    is skipped.
+  - `prompt_block()` tells the speaking character the player's open-thread count and how far
+    their own arc has come against the cast average, and `restraint()` grades that into
+    `hold`/`easy`/`free`, which `_commission_block` uses to decide how hard to lean on "leave
+    it there for now". **Calibrate in both directions** — blanket restraint just reinstates
+    the stalled-arc bug.
 - `witness.py` — `record_experience(...)` logs an event **and** writes a first-person memory to
   everyone who was present, so a character can tell "I was there" from "I heard about it".
   Salience tiers `AMBIENT/NOTE/BEAT/MAJOR` gate whether anything is remembered at all;

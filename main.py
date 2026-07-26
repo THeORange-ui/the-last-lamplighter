@@ -20,6 +20,7 @@ from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
 from engine.state import GroundItem
 from engine.trade import is_vendor
 from engine.cartography import mark_visited
+from engine.pacing import bump_tick, heartbeat
 from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
                             witnesses)
 from npc.agenda import note_quest_done
@@ -237,7 +238,17 @@ class Game:
                 # Their own goal just moved — make sure they notice next time you talk.
                 note_quest_done(self.world, q.giver, q.title)
         if completed:
+            self.progress("quest")
             self._auto_commission()
+
+    def progress(self, kind: str):
+        """One unit of progress happened — a quest finished, a night passed, a new room
+        seen. The world may answer by nudging somebody the player has been neglecting
+        (engine/pacing.py); it stays quiet if their plate is already full."""
+        bump_tick(self.world, kind)
+        q = heartbeat(self.world)
+        if q is not None:
+            self.set_toast(f"New note: {q.title}")
 
     def _auto_commission(self):
         """A 'check back with X' breadcrumb makes no sense when X is walking beside you.
@@ -325,7 +336,10 @@ class Game:
         people already standing there did — so only the party remembers it, and only
         the first time, or memory fills up with forty identical arrivals."""
         room = self.rooms[self.world.player.room]
+        first_time = room.id not in (self.world.flags.get("visited") or [])
         mark_visited(self.world, room.id)
+        if first_time:
+            self.progress("room")
         desc = f" {room.desc}" if room.desc else ""
         record_experience(
             self.world, "arrive", f"You entered {room.name}.",
@@ -685,6 +699,8 @@ class Game:
         if result.panel == "storage":
             self.storage_panel = StoragePanel(self.world)
             self.storage_open = True
+        if any(k == "rest" for k, _ in events):
+            self.progress("rest")
         if result.quests_dirty:
             self.on_quests_completed(refresh_and_complete(self.world, self.known))
 
