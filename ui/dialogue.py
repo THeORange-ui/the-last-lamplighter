@@ -42,8 +42,15 @@ class _Turn:
         self.value: dict | None = None
 
     def run(self, fn):
-        self.value = fn()
-        self.done = True
+        # `done` is set whatever happens: if the worker dies the box would otherwise
+        # sit on "thinking" forever, which is worse than showing an error.
+        try:
+            self.value = fn()
+        except Exception as e:                                  # noqa: BLE001
+            self.value = {"dialogue": "…", "result": None, "completed_quests": [],
+                          "error": f"{type(e).__name__}: {e}"}
+        finally:
+            self.done = True
 
 
 class DialogueBox:
@@ -135,8 +142,11 @@ class DialogueBox:
             self.banner.append(eff)
         for q in out.get("completed_quests", []):
             self.banner.append(f"• Quest complete: “{q.title}”")
-        if out.get("error"):
-            self.banner.append("(the words don't come — connection trouble)")
+        err = out.get("error") or ""
+        if err:
+            # A setup problem needs saying plainly; a flaky endpoint gets the flavour.
+            self.banner.append(f"! {err[:70]}" if "settings.json" in err
+                               else "(the words don't come — connection trouble)")
         if out.get("result") and out["result"].end_dialogue:
             self._end_after_reveal = True
         if out.get("result") and out["result"].starts_combat:

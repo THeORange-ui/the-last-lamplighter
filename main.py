@@ -21,6 +21,7 @@ from engine.state import GroundItem
 from engine.trade import is_vendor
 from engine.cartography import mark_visited
 from engine.pacing import bump_tick, heartbeat
+from llm.client import settings_problem
 from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
                             witnesses)
 from npc.agenda import note_quest_done
@@ -116,6 +117,9 @@ class Game:
         self._beat_no = 0                         # notable beats, for bark cooldowns
         self._bark: dict | None = None            # {npc, text, timer} currently showing
         self._bark_job: dict | None = None        # an interjection being written
+        # Checked once at boot so the title screen can say so, rather than the
+        # player finding out by walking up to somebody and getting nothing.
+        self.llm_problem = settings_problem()
         self.running = True
         mark_visited(self.world, self.world.player.room)
         self._gather_party()
@@ -911,6 +915,23 @@ class Game:
         for ln in lines:
             draw_text(self.screen, ln, (cx, y), T.font(18), T.TEXT, center=True)
             y += 30
+
+        if self.llm_problem:
+            # No endpoint configured: the world works, but nobody can speak. Say so
+            # here rather than letting a first-time player discover it at Wren's feet.
+            from ui.render import wrap_text
+            warn = pygame.Rect(60, T.SCREEN_H - 78, T.SCREEN_W - 120, 70)
+            s = pygame.Surface(warn.size, pygame.SRCALPHA)
+            s.fill((60, 20, 20, 220))
+            self.screen.blit(s, warn.topleft)
+            pygame.draw.rect(self.screen, (180, 90, 90), warn, 1, border_radius=4)
+            draw_text(self.screen, "No LLM endpoint configured — nobody will talk yet",
+                      (cx, warn.top + 8), T.font(15, bold=True), (255, 190, 190),
+                      center=True)
+            wy = warn.top + 30
+            for ln in wrap_text(self.llm_problem, T.font(13), warn.width - 24)[:2]:
+                draw_text(self.screen, ln, (cx, wy), T.font(13), T.TEXT_DIM, center=True)
+                wy += 18
 
 
 def main():

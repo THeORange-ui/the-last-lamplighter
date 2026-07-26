@@ -1,3 +1,5 @@
-pygame>=2.6.1
-langgraph>=1.2.9
-openai>=2.0.0
+# Python 3.10+ (developed on 3.13). Upper bounds so a future major release of a
+# dependency can't break a fresh clone.
+pygame>=2.6.1,<3
+langgraph>=1.2.9,<2
+openai>=2.0.0,<3

@@ -20,17 +20,31 @@ quest was placed in the world.
 
 ## Setup
 
+Needs **Python 3.10+** (developed on 3.13). No other system dependencies.
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-cp settings.example.json settings.json   # then fill in your endpoint
+cp settings.example.json settings.json
 ```
 
-`settings.json` (gitignored) points at any OpenAI-compatible endpoint:
+Then open `settings.json` and point it at any **OpenAI-compatible** endpoint:
 
 ```json
 {"base_url": "https://api.openai.com/v1", "api_key": "sk-...", "model": "gpt-4o-mini"}
 ```
+
+**You supply your own endpoint and key** — there is none bundled, and the project never
+sees it (`settings.json` is gitignored). Every conversation, enemy turn and companion
+remark is one API call, so a session against a paid endpoint costs real money; a small
+fast model is plenty. It also works entirely locally — point `base_url` at
+**Ollama** (`http://localhost:11434/v1`) or **LM Studio** (`http://localhost:1234/v1`)
+and set `api_key` to any non-empty string.
+
+The game runs without any of this — the world, map and combat all work — but nobody
+will speak to you, and the title screen will tell you so.
+
+On Windows, use `.venv\Scripts\python` in place of `.venv/bin/python` throughout.
 
 ## Run
 

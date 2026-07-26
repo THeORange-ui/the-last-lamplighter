@@ -26,7 +26,7 @@ in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk 
   modules and asserting on `WorldState` for logic changes — the engine is UI-free and
   testable without a window.
 - `settings.json` (gitignored) holds `{base_url, api_key, model}` for any OpenAI-compatible
-  endpoint. **It contains a live `sk-` key — never commit, print, or echo it.** Before any
+  endpoint. **The local copy holds a live `sk-` key — never commit, print, or echo it.** Before any
   commit, confirm `settings.json`, `save/`, `runtime_memory/`, and `.venv/` are unstaged.
 
 ## Wrap-up workflow (when finishing a piece of work)

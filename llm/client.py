@@ -12,17 +12,37 @@ from typing import Any
 
 from openai import OpenAI
 
-from .config import Settings, load_settings
+from .config import Settings, SettingsError, load_settings
 
 _client: OpenAI | None = None
 _settings: Settings | None = None
 
 
 def get_settings() -> Settings:
+    """The endpoint settings, loaded once.
+
+    A missing or malformed settings.json is raised as an LLMError, not a bare
+    SettingsError: every caller already degrades gracefully on LLMError, and a fresh
+    clone with no settings.json used to take the whole game down the first time the
+    player tried to speak to anyone.
+    """
     global _settings
     if _settings is None:
-        _settings = load_settings()
+        try:
+            _settings = load_settings()
+        except SettingsError as e:
+            raise LLMError(str(e)) from e
     return _settings
+
+
+def settings_problem() -> str:
+    """"" if the endpoint is configured, else a message saying what to do about it.
+    Used at startup so the player is told before they walk up to somebody."""
+    try:
+        get_settings()
+    except LLMError as e:
+        return str(e)
+    return ""
 
 
 def _client_for(settings: Settings) -> OpenAI:
