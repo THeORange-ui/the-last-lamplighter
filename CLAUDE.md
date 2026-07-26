@@ -377,9 +377,16 @@ From an outside player's session (not the developer's), all fixed:
   was only ever shown quest *titles* — so a `judged` quest could never be closed except
   by guessing the slug. `_world_briefing` now lists the ids of quests **this** NPC gave.
   Any action taking an id needs the id in the briefing; check that when adding one.
-- **`judged` gets over-used.** An LLM reaches for the expressive option, so "go and see
-  Tilda" came back as `judged` rather than `talk_to`. The prompt now says concrete types
-  complete by themselves and `judged` is a last resort that hangs forever if misused.
+- **`judged` needs steering, not suppressing.** "Go and see Tilda" came back as `judged`
+  rather than `talk_to`. The prompt now picks by what would settle the thing: a clear test
+  takes a concrete type, something turning on how the giver *feels* (a worry, a
+  reconciliation) legitimately takes `judged`. Don't over-correct into "avoid it" — the
+  forever-open failure was the missing id, not the type.
+- **`ActionResult` speaks to three audiences.** `effects` is player-facing ("Wren gives
+  you: Oil Flask") and belongs only in the UI. Feeding it into memory made Wren remember
+  being handed her own oil, and a bystander remember being handed it too — the real
+  source of the scrambled summaries. Use `self_effects` (first person, the actor) and
+  `observed` (third person, onlookers); `_note()` fills all three at once.
 - **A `judged` quest must tell the player how it ends** — `build_quest` appends "Tell
   &lt;giver&gt; about it when you're done", because doing the thing produces no feedback.
 - **Memory compaction confused the NPC with the player.** Bram's summary had *him*

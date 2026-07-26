@@ -441,8 +441,11 @@ def act(state: TurnState) -> TurnState:
         line = f'The player approached; you said: "{state["dialogue"]}"'
     else:
         line = f'Player said: "{state["player_input"]}" | You replied: "{state["dialogue"]}"'
-    if result.effects:
-        line += " | " + "; ".join(result.effects)
+    # The actor's own memory takes the first-person phrasing. Using the player-facing
+    # `effects` here is what put "Wren gives you: Oil Flask" into Wren's own head, and
+    # compaction then dutifully concluded she had been handed her own oil.
+    if result.self_effects:
+        line += " | " + "; ".join(result.self_effects)
     mem.remember(line)
 
     # If a quest THIS npc gave just completed, they personally remember it — and it
@@ -482,8 +485,10 @@ def _record_for_bystanders(world, npc_id, state, result) -> None:
     name = character_name(npc_id)
     said = state["dialogue"][:_BYSTANDER_CHARS]
     line = f'You were there while the player spoke with {name}. {name} said: "{said}"'
-    if result.effects:
-        line += " | " + "; ".join(result.effects)
+    if result.observed:
+        # Third person for an onlooker: "you" in the player-facing text would read as
+        # the bystander themselves.
+        line += " | " + "; ".join(result.observed)
     for nid in others:
         NPCMemory.remember_for(nid, line)
 

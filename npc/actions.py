@@ -32,14 +32,17 @@ ACTIONS: dict[str, str] = {
         '                     "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}\n'
         "    Offer a task. The target MUST be a real entity listed in the world briefing.\n"
-        "    PREFER a concrete type — if what you want is 'go and see Tilda', that is\n"
-        "    talk_to tilda; if it is 'get to the ridge', that is reach. Those complete by\n"
-        "    themselves the moment the player does the thing.\n"
-        "    \"judged\" is a LAST RESORT for something no counter could ever settle (\"put my\n"
-        "    mind at rest about Ansel\"). Its target is a plain-English criterion, nothing\n"
-        "    in the world can satisfy it, and it stays open until YOU close it with\n"
-        "    complete_quest — so if you use it for an errand that could have been talk_to,\n"
-        "    the player does the errand and the task hangs there forever."
+        "    Pick the type by what would actually settle it:\n"
+        "      • Something with a clear test — go and see Tilda, reach the ridge, bring me\n"
+        "        the staff — takes a concrete type (talk_to / reach / fetch / deliver /\n"
+        "        interact). Those complete themselves the moment it's done.\n"
+        "      • Something that turns on how you FEEL about it — put my mind at rest about\n"
+        "        Ansel, help me decide whether to stay, make my peace with Bram — takes\n"
+        "        \"judged\", whose target is a plain-English criterion. Nothing in the world\n"
+        "        can settle that but you, so YOU close it later with complete_quest (your\n"
+        "        open quests' ids are in your briefing).\n"
+        "    Use judged where it honestly fits — worries and reconciliations are real asks —\n"
+        "    just don't reach for it when a plain errand would do."
     ),
     "request_help": (
         '- {"type": "request_help", "quest": {\n'
@@ -176,13 +179,31 @@ _MAX_OFFER = 10          # most of one item an NPC can hand over in a single act
 
 @dataclass
 class ActionResult:
-    effects: list[str] = field(default_factory=list)   # player-visible lines
+    """What an action did, said three ways.
+
+    `effects` is written for the player ("Wren gives you: Oil Flask"), and that is the
+    only place it belongs. Writing it into the actor's own memory made Wren remember
+    *being handed* her own oil, and a bystander remember being handed it too — which
+    is why compacted summaries came out with everyone's deeds swapped around. Each
+    audience gets its own phrasing.
+    """
+
+    effects: list[str] = field(default_factory=list)        # shown to the player
+    self_effects: list[str] = field(default_factory=list)   # the actor's own memory
+    observed: list[str] = field(default_factory=list)       # what onlookers remember
     debug: list[str] = field(default_factory=list)     # dropped/invalid notes
     end_dialogue: bool = False
     wants_combat: bool = False     # NPC pledged to fight as an ally
     starts_combat: bool = False    # NPC turned hostile and attacks now
     joined_party: bool = False     # NPC just joined the travelling party
     left_party: bool = False       # NPC just left the travelling party
+
+
+def _note(result: ActionResult, player: str, mine: str, seen: str) -> None:
+    """Record one outcome for all three audiences at once."""
+    result.effects.append(player)
+    result.self_effects.append(mine)
+    result.observed.append(seen)
 
 
 def _free_interior_tile(room: Room, blocked: set[tuple[int, int]]) -> tuple[int, int]:
@@ -241,7 +262,9 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 continue
             state.quests.append(quest)
             state.events.record("quest_start", f"{name} gave you the quest “{quest.title}”.")
-            result.effects.append(f"{name} gives you a quest: “{quest.title}”.")
+            _note(result, f"{name} gives you a quest: “{quest.title}”.",
+                  f"You asked them to: “{quest.title}”.",
+                  f"{name} asked the player to: “{quest.title}”.")
 
         elif atype == "request_help":
             if not isinstance(raw.get("quest"), dict):
@@ -262,7 +285,9 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 continue
             state.quests.append(quest)
             state.events.record("quest_start", f"{name} asked you for help: “{quest.title}”.")
-            result.effects.append(f"{name} asks a favour of you: “{quest.title}”.")
+            _note(result, f"{name} asks a favour of you: “{quest.title}”.",
+                  f"You asked them a favour: “{quest.title}”.",
+                  f"{name} asked the player a favour: “{quest.title}”.")
 
         elif atype == "complete_quest":
             qid = str(raw.get("quest_id", "")).strip()
@@ -278,7 +303,9 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             # Mark it satisfied; refresh_and_complete (right after this) grants the
             # reward and opens any follow-ups, exactly as for a mechanical quest.
             quest.progress = quest.objective.count
-            result.effects.append(f"{name} considers “{quest.title}” settled.")
+            _note(result, f"{name} considers “{quest.title}” settled.",
+                  f"You judged “{quest.title}” done, and told them so.",
+                  f"{name} judged “{quest.title}” done.")
 
         elif atype == "offer_item":
             item = str(raw.get("item", "")).strip()
@@ -310,7 +337,9 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 room=state.npcs[npc_id].room, public=False, salience=BEAT,
                 first_person=f"You saw {name} hand the player the {label}.",
                 exclude=(npc_id,), bond_items=(item,))
-            result.effects.append(f"{name} gives you: {label}.")
+            _note(result, f"{name} gives you: {label}.",
+                  f"You handed them: {label}.",
+                  f"{name} handed the player: {label}.")
 
         elif atype == "reveal_fact":
             fact = str(raw.get("fact", "")).strip()
@@ -343,13 +372,19 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 text = spec.get("read_text", "")
                 NPCMemory.remember_for(npc_id, f"You read the {label}. It said: {text}")
                 state.events.record("npc_use", f"{name} reads the {label}.", public=False)
-                result.effects.append(f"{name} reads the {label}.")
+                _note(result, f"{name} reads the {label}.",
+                              f"You read the {label}.",
+                              f"{name} read the {label}.")
             elif use in ("eat", "drink"):
                 npc_inv.remove(item)
                 verb = "eats" if use == "eat" else "drinks"
-                result.effects.append(f"{name} {verb} the {label}.")
+                _note(result, f"{name} {verb} the {label}.",
+                              f"You {verb} the {label}.",
+                              f"{name} {verb} the {label}.")
             else:
-                result.effects.append(f"{name} turns the {label} over in their hands.")
+                _note(result, f"{name} turns the {label} over in their hands.",
+                              f"You turned the {label} over in your hands.",
+                              f"{name} turned the {label} over.")
 
         elif atype == "set_goal":
             from npc import agenda
@@ -386,14 +421,18 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                     NPCMemory.remember_for(tid, f"{name} told you: {info}")
                     told.append(character_name(tid))
             if told:
-                result.effects.append(f"{name} passes word to {', '.join(told)}.")
+                _note(result, f"{name} passes word to {', '.join(told)}.",
+                      f"You passed word to {', '.join(told)}.",
+                      f"{name} passed word to {', '.join(told)}.")
                 # A gossip's telling doesn't stay between the two of them: it goes into
                 # the public feed, which is what every NPC in town reads as rumour. Tell
                 # Moss something and by morning everyone has heard a version of it.
                 if load_character(npc_id).get("gossip"):
                     state.events.record(
                         "rumor", f"Word going round town: {info}", public=True)
-                    result.effects.append("Word of it starts going round town.")
+                    _note(result, "Word of it starts going round town.",
+                          "You let it out, so it will be all round town by morning.",
+                          f"{name} let it out; it will be round town by morning.")
 
         elif atype == "move_to":
             room_id = str(raw.get("room", "")).strip()
@@ -418,9 +457,12 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 state.events.record("party", f"{name} left your company.", public=True)
             npc.room = room_id
             npc.x, npc.y = _free_interior_tile(room, room.blocked())
-            result.effects.append(
-                f"{name} parts ways with you and leaves for {room.name}." if parted
-                else f"{name} leaves for {room.name}.")
+            _note(result,
+                  f"{name} parts ways with you and leaves for {room.name}." if parted
+                  else f"{name} leaves for {room.name}.",
+                  f"You left them and went to {room.name}." if parted
+                  else f"You walked off to {room.name}.",
+                  f"{name} left for {room.name}.")
             result.end_dialogue = True
 
         elif atype == "join_party":
@@ -429,7 +471,9 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 result.joined_party = True
                 result.wants_combat = True
                 state.events.record("party", f"{name} joined you.", public=True)
-                result.effects.append(f"{name} takes up beside you — a companion now.")
+                _note(result, f"{name} takes up beside you — a companion now.",
+                      "You agreed to travel with them for a while.",
+                      f"{name} agreed to travel with the player.")
 
         elif atype == "leave_party":
             if state.remove_from_party(npc_id):
@@ -437,13 +481,17 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                 result.left_party = True
                 result.end_dialogue = True
                 state.events.record("party", f"{name} left your company.", public=True)
-                result.effects.append(f"{name} parts ways with you.")
+                _note(result, f"{name} parts ways with you.",
+                      "You stopped travelling with them and went your own way.",
+                      f"{name} stopped travelling with the player.")
 
         elif atype == "attack":
             result.starts_combat = True
             result.end_dialogue = True
             state.npcs[npc_id].flags["hostile"] = True
-            result.effects.append(f"{name} turns on you!")
+            _note(result, f"{name} turns on you!",
+                  "You turned on them.",
+                  f"{name} turned on the player!")
 
         elif atype == "end_dialogue":
             result.end_dialogue = True

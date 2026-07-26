@@ -5,6 +5,7 @@ __pycache__/
 .DS_Store
 save/
 runtime_memory/
+test-saves/
 
 # founding design doc — kept locally, not shipped
 ORIGINAL_GAME_SETTING.md
