@@ -32,6 +32,7 @@ from npc.roster import character_name
 from ui import theme as T
 from ui.dialogue import DialogueBox
 from ui.combat import CombatScene
+from ui.epilogue import Epilogue
 from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
 from ui.mapview import draw_full_map, draw_minimap
@@ -96,6 +97,7 @@ class Game:
         self.dialogue: DialogueBox | None = None
         self.journal_open = False
         self.map_open = False
+        self.epilogue: Epilogue | None = None
         self.menu_open = False
         self.inventory_open = False
         self.inv_panel: InventoryPanel | None = None
@@ -625,6 +627,8 @@ class Game:
                               room=w.player.room, salience=MAJOR,
                               first_person=seen, targets=list(w.party))
             self.set_toast("The dusk lifts. Emberhold will hold.")
+            self.epilogue = Epilogue(w, outcome)      # arcs land, then free play
+            self.scene = "epilogue"
         elif ctx["type"] == "creature":
             w.flags[f"{ctx.get('room', 'ridge')}_cleared"] = True
             verb = "drive off" if outcome == "won" else "quiet"
@@ -732,6 +736,9 @@ class Game:
             elif self.scene == "dialogue":
                 if self.dialogue:
                     self.dialogue.handle_event(event)
+            elif self.scene == "epilogue":
+                if self.epilogue:
+                    self.epilogue.handle_event(event)
             elif self.scene == "combat":
                 if self.combat_scene:
                     if self.combat_scene.phase == "ended":
@@ -794,6 +801,9 @@ class Game:
                     self.start_npc_combat(combat_req)
         elif self.scene == "combat" and self.combat_scene:
             self.combat_scene.update(dt)
+        elif self.scene == "epilogue" and self.epilogue and self.epilogue.finished:
+            self.epilogue = None
+            self.scene = "overworld"       # a lit Emberhold, still yours to walk
 
     # --- draw -------------------------------------------------------------
     def draw(self):
@@ -810,6 +820,8 @@ class Game:
 
         if self.scene == "intro":
             self.draw_intro()
+        elif self.scene == "epilogue" and self.epilogue:
+            self.epilogue.draw(self.screen)
         elif self.scene == "dialogue" and self.dialogue:
             self.dialogue.draw(self.screen)
 

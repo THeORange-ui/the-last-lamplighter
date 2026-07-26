@@ -253,6 +253,9 @@ the JSON object), raising `LLMError` on failure.
   corner minimap is always up; **M** opens the full map. `waypoints()` turns each active
   objective into a room marker (reach → the room; talk_to/check_back/deliver → wherever that
   person is *now*; interact → the nearest unfinished one; fetch → where the thing is lying).
+- **`Show` transfers nothing** — it's the third trade verb and exists so putting an object in
+  front of someone isn't an act of commerce. The NPC's briefing already carries their own
+  words about anything present they have a bond with, so the reaction comes for free.
 - **Trade inside a conversation opens with Ctrl/Cmd, not I** (`ui/dialogue.py: TRADE_KEYS`) —
   `I` collided with typing a message. Don't reintroduce letter keys as commands in the
   dialogue box. For a `vendor` NPC the same key opens the **`ShopPanel`** (margin buy/sell)
@@ -327,12 +330,19 @@ first, then content, then the ensemble — **stop for a play session after each 
   `fetch`/`deliver`/`talk_to` only, count 1, no follow-ups, one open request each, item rewards
   paid out of their own pack). Bram/Sella/Perrin/the Gloam given the schema-v2 treatment with
   3-4 beat arcs. `vendor` gained the agenda actions, since Sella has an arc too.
-- **Phase C (partly done, rest planned)** — the ensemble. **Done early, from play feedback:**
-  overworld interjections (`npc/interject.py`, the rule half of the hybrid filter) and
-  bystanders remembering conversations they stood in. **Still planned:** the `invoke_others`
-  hint from a speaking NPC (the other half of the filter, for in-conversation interjections), a
-  **Show** verb in `TradePanel` (today you can only gift or sell, which makes showing someone
-  their dead mentor's staff an act of commerce), NPC-to-NPC exchanges in scene, a rumor network,
-  and an **epilogue** keyed off each character's arc stage, returning to free play afterwards.
+- **Phase C (done)** — the ensemble.
+  - **Interjections** use the full hybrid filter. Overworld beats go through the rule half
+    (`npc/interject.py: choose_interjector` — bond relevance, beat cooldown, `once_key`); in
+    conversation, the speaking NPC returns **`invoke_others`** in the JSON it was already
+    producing, so asking costs nothing, and `ui/dialogue.py` gates on presence plus
+    `MAX_ASIDES` before spending one short call. The aside is drawn under the reply in the
+    speaker's colour, and the dialogue box grows to fit it.
+  - **Show** in `TradePanel` — holds an item out, transfers nothing. It leads the action list
+    because putting a thing in front of someone is the commonest reason to open your pack.
+  - **Rumour network** — `gossip: true` on a character (Moss) means their `tell` also writes a
+    public event, so what you tell them reaches everyone's briefing as rumour.
+  - **Epilogue** (`ui/epilogue.py`) — resolving the Gloam writes each main character an ending
+    from how many agenda beats they actually closed plus what they remember of the player (one
+    short call each, authored fallback per stage on `LLMError`), then returns to free play.
 
 Confirm scope with the user before starting new major work.

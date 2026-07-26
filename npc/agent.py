@@ -57,6 +57,7 @@ class TurnState(TypedDict, total=False):
     error: str
     check_back_id: str
     goal_progress: str
+    invoke_others: list
 
 
 def _here_block(world, rooms, npc_id) -> str:
@@ -212,7 +213,8 @@ Affinity: {npc.affinity} out of 100 → {label}.
 Reply with ONE JSON object and nothing else:
 {{"dialogue": "<what you SAY, in character, 1-4 sentences>",
   "actions": [ ... ],
-  "goal_progress": "none" | "advanced" | "resolved"}}
+  "goal_progress": "none" | "advanced" | "resolved",
+  "invoke_others": ["<npc id of someone ELSE standing here who would speak up>", ...]}}
 Rules:
 - Speak only as {char['name']}. Do not narrate other characters or the scene.
 - Never invent people, places, or items that aren't in the briefing above.
@@ -220,6 +222,10 @@ Rules:
 - Let your affinity and memories shape your tone and what you're willing to do.
 - "goal_progress" reports honestly on what you are trying to do: "advanced" if this
   exchange moved it forward, "resolved" only if it is truly finished, else "none".
+- "invoke_others" is usually empty. Name someone only if they are listed as being here
+  with you AND this exchange genuinely lands on them — you said something about them,
+  or about someone they lost, or they'd have an obvious reason to cut in. You are not
+  deciding what they say, only that they'd want to. Leave it out otherwise.
 """
     if world.in_party(npc_id):
         system += (
@@ -344,8 +350,12 @@ def reason(state: TurnState) -> TurnState:
     actions = out.get("actions", [])
     if not isinstance(actions, list):
         actions = []
+    invoke = out.get("invoke_others")
+    if not isinstance(invoke, list):
+        invoke = []
     return {"dialogue": dialogue, "raw_actions": actions,
-            "goal_progress": str(out.get("goal_progress", "")).strip().lower()}
+            "goal_progress": str(out.get("goal_progress", "")).strip().lower(),
+            "invoke_others": [str(x).strip() for x in invoke if str(x).strip()][:2]}
 
 
 def act(state: TurnState) -> TurnState:
@@ -485,4 +495,5 @@ def npc_respond(world, rooms, known, npc_id, player_input, memory) -> dict:
         "result": final.get("result"),
         "completed_quests": final.get("completed_quests", []),
         "error": final.get("error"),
+        "invoke_others": final.get("invoke_others", []),
     }

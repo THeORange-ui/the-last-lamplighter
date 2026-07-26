@@ -15,6 +15,8 @@ from engine.items import display_name
 from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from npc.agent import APPROACH, npc_respond
+from npc.interject import interject
+from npc.memory import NPCMemory
 from npc.roster import character_name, load_character
 from ui import theme as T
 from ui.inventory import TradePanel
@@ -26,6 +28,7 @@ CLOSE_DELAY = 0.6        # seconds to linger after an end_dialogue line
 _BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
 _BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
 _INPUT_LINES = 2         # how many wrapped lines of the input to show (tail)
+MAX_ASIDES = 2           # most times a bystander may cut into one conversation
 
 # Ctrl / Cmd toggles the trade view (I would collide with typing a message).
 TRADE_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
@@ -69,6 +72,11 @@ class DialogueBox:
         self._bs_timer = _BS_DELAY               # backspace hold-to-repeat countdown
         self.trade: TradePanel | None = None
         self.combat_request: str | None = None   # npc_id if the NPC turned hostile
+        # Someone else in the room cutting in (npc/interject.py). Capped per
+        # conversation so a crowded room doesn't turn into a chorus.
+        self.aside: tuple[str, str] | None = None      # (npc_id, line)
+        self._aside_job: dict | None = None
+        self._asides_left = MAX_ASIDES
 
         self._start_turn(APPROACH)
 
@@ -85,11 +93,44 @@ class DialogueBox:
         )
         t.start()
 
+    def _maybe_aside(self, out: dict):
+        """The speaker named someone else here who'd want to cut in.
+
+        The speaker is the only one who can hear that a line landed on a bystander,
+        and asking them costs nothing — it rides on the reply we already paid for.
+        The engine still decides whether it actually happens.
+        """
+        if self._asides_left <= 0 or self._aside_job is not None:
+            return
+        here = self.world.npcs[self.npc_id].room
+        for nid in out.get("invoke_others") or []:
+            npc = self.world.npcs.get(nid)
+            if npc is None or nid == self.npc_id or npc.room != here:
+                continue
+            beat = {"kind": "said", "text": out.get("dialogue", ""),
+                    "once_key": f"aside:{self.npc_id}:{len(self.banner)}",
+                    "items": (), "npcs": (self.npc_id,), "room": here, "n": 0}
+            job = {"done": False, "npc": nid, "text": ""}
+
+            def run(nid=nid, beat=beat, job=job):
+                try:
+                    job["text"] = interject(self.world, nid, beat, NPCMemory(nid))
+                except Exception:
+                    job["text"] = ""
+                job["done"] = True
+
+            threading.Thread(target=run, daemon=True).start()
+            self._aside_job = job
+            self._asides_left -= 1
+            return
+
     def _consume_result(self, out: dict):
         self.npc_line = out.get("dialogue", "…")
         self.reveal = 0.0
         self.mode = "reveal"
         self.banner = []
+        self.aside = None
+        self._maybe_aside(out)
         for eff in (out.get("result").effects if out.get("result") else []):
             self.banner.append(eff)
         for q in out.get("completed_quests", []):
@@ -105,6 +146,10 @@ class DialogueBox:
     # --- update / events --------------------------------------------------
     def update(self, dt):
         self._caret = (self._caret + dt) % 1.0
+        if self._aside_job is not None and self._aside_job["done"]:
+            job, self._aside_job = self._aside_job, None
+            if job["text"]:
+                self.aside = (job["npc"], job["text"])
         if self.mode == "thinking" and self._turn and self._turn.done:
             self._consume_result(self._turn.value)
             self._turn = None
@@ -170,6 +215,12 @@ class DialogueBox:
         name = display_name(item) if item else ""
         if action == "close":
             self.trade = None
+        elif action == "show":
+            # Nothing changes hands — you just hold it out. The NPC's briefing already
+            # carries their own words about anything here they have a bond with.
+            self.trade = None
+            self._start_turn(f"[You hold out the {name} where {self.name} can see it, "
+                             f"and say nothing.]")
         elif action == "gift":
             if give_to_npc(self.world, npc, item):
                 self.world.adjust_affinity(self.npc_id, 2)
@@ -187,9 +238,17 @@ class DialogueBox:
             self.trade.message = (f"Sold the {name} ({why})." if ok
                                   else f"Can't sell the {name}: {why}.")
 
+    def _aside_visible(self) -> bool:
+        """An aside only shows once the speaker's own line has finished revealing."""
+        return bool(self.aside) and self.mode != "thinking" \
+            and self.reveal >= len(self.npc_line)
+
     # --- draw -------------------------------------------------------------
     def draw(self, screen):
-        box = pygame.Rect(12, T.PLAY_H - 210, T.SCREEN_W - 24, 198)
+        # The box grows upward while a bystander's aside is showing, so a long reply
+        # plus a cut-in doesn't spill past the input row.
+        extra = 66 if self._aside_visible() else 0
+        box = pygame.Rect(12, T.PLAY_H - 210 - extra, T.SCREEN_W - 24, 198 + extra)
         panel = pygame.Surface(box.size, pygame.SRCALPHA)
         panel.fill((*T.BOX_BG, 235))
         screen.blit(panel, box.topleft)
@@ -215,6 +274,16 @@ class DialogueBox:
             for ln in wrap_text(shown, T.font(19), max_w):
                 draw_text(screen, ln, (body_x, y), T.font(19), T.TEXT)
                 y += 26
+            # Somebody else in the room cutting in, once the reply has finished.
+            if self._aside_visible():
+                nid, line = self.aside
+                y += 4
+                draw_text(screen, f"{character_name(nid)}:", (body_x, y),
+                          T.font(15, bold=True), T.npc_color(nid))
+                y += 20
+                for ln in wrap_text(f"“{line}”", T.font(17), max_w - 12)[:2]:
+                    draw_text(screen, ln, (body_x + 12, y), T.font(17), T.TEXT_DIM)
+                    y += 22
 
         # effect banner
         if self.banner:

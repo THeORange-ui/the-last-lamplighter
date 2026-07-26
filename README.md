@@ -55,13 +55,18 @@ NPCs can only trade or share a word.
 
 In the inventory you can **Use** items (read the ridge map, eat food to heal) or
 **Drop** them on the ground. Press **Ctrl/Cmd** *during a conversation* to open a trade
-view with both inventories: **Gift** or **Sell** your items, **Ask for** or **Buy** theirs.
-Gifting and asking go through the NPC's own judgement; buying and selling use coins at
-fixed catalog prices.
+view with both inventories: **Show**, **Gift** or **Sell** your items, **Ask for** or **Buy**
+theirs. Show hands over nothing — you just hold the thing out, which is the only sane way to
+put a dead man's staff in front of the apprentice who lost him. Gifting and asking go through
+the NPC's own judgement; buying and selling use coins at fixed catalog prices.
 
 Companions **speak up on their own** when something in front of them actually touches
 them — an object they knew, a place they have history with — and otherwise walk
-quietly, which is most of the time.
+quietly, which is most of the time. In conversation they'll cut in when what someone
+said lands on them, because the person speaking is the one who notices that it did.
+
+Anything you tell **Moss** is round the whole town by morning, and turns up in other
+people's mouths as rumour.
 
 Characters remember what they were **there** for. Take a companion into the tavern
 cellar and they remember the room; pick something up in front of them and they saw
@@ -119,6 +124,10 @@ script (and can be brought to a close when your story with them is done).
 The LLM never mutates the game directly: it returns `dialogue + actions`, and
 `npc/actions.py` validates every action against real world entities before
 applying it. Ungrounded actions are dropped, so emergent quests stay completable.
+
+Reach the Gloam and answer it — with a blade or without one — and the dusk lifts, and
+the game tells you what became of everyone based on how far you actually got with them.
+Then it hands Emberhold back, lit, and you can keep walking it.
 
 **Milestones:** M1 (this) is the social/quest framework. M2 adds turn-based
 combat with an ACT/mercy route (talk enemies — and the Gloam — down). See

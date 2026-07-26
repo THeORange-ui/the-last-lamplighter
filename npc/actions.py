@@ -383,6 +383,13 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
                     told.append(character_name(tid))
             if told:
                 result.effects.append(f"{name} passes word to {', '.join(told)}.")
+                # A gossip's telling doesn't stay between the two of them: it goes into
+                # the public feed, which is what every NPC in town reads as rumour. Tell
+                # Moss something and by morning everyone has heard a version of it.
+                if load_character(npc_id).get("gossip"):
+                    state.events.record(
+                        "rumor", f"Word going round town: {info}", public=True)
+                    result.effects.append("Word of it starts going round town.")
 
         elif atype == "move_to":
             room_id = str(raw.get("room", "")).strip()

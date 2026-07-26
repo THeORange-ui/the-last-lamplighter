@@ -155,7 +155,9 @@ class TradePanel:
         return [x for x in grouped(inv) if x[0] != CURRENCY]
 
     def _actions(self, side):
-        return ([("gift", "Gift"), ("sell", "Sell")] if side == "player"
+        # Show comes first: putting a thing in front of someone is the commonest
+        # reason to open your pack in a conversation, and it isn't a transaction.
+        return ([("show", "Show"), ("gift", "Gift"), ("sell", "Sell")] if side == "player"
                 else [("ask", "Ask for"), ("buy", "Buy")])
 
     def handle_event(self, event):
