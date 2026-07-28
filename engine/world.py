@@ -174,19 +174,20 @@ def build_rooms() -> dict[str, Room]:
                    (4, 8), (5, 8)},                # stacked crates
         doors=[
             Door(x=0, y=MIDY, to_room="tavern", spawn=(R - 1, MIDY)),
-            Door(x=R, y=MIDY, to_room="road", spawn=(1, MIDY)),
+            Door(x=R, y=MIDY, to_room="camp", spawn=(1, MIDY)),
         ],
     )
     road = Room(
         id="road",
         name="The Old Road",
-        desc="The Old Road out of town, running east toward the ridge. Frost in the ruts, "
-             "roadside stones, and behind you the lamps of town getting further apart.",
+        desc="The Old Road past the waystation, running east toward the ridge. Frost in the "
+             "ruts, roadside stones, and behind you the lamps of town getting further apart.",
         features=["frost standing in the wheel ruts", "roadside stones", "the lights of town behind you"],
         obstacles={(6, 4), (12, 9)},              # roadside rocks
         doors=[
-            Door(x=0, y=MIDY, to_room="market", spawn=(R - 1, MIDY)),
-            Door(x=R, y=MIDY, to_room="camp", spawn=(1, MIDY)),
+            Door(x=0, y=MIDY, to_room="camp", spawn=(R - 1, MIDY)),
+            # Gating (read the map + lamps lit) is enforced in main.try_move.
+            Door(x=R, y=MIDY, to_room="ridge_foot", spawn=(1, MIDY)),
             Door(x=9, y=0, to_room="home", spawn=(9, GRID_H - 2)),      # fork
         ],
     )
@@ -202,10 +203,14 @@ def build_rooms() -> dict[str, Room]:
     )
     camp = Room(
         id="camp",
+        # Deliberately early on the main line, one room past the market: this is where
+        # every night of the game is spent, and a camp you have to hike back to is a camp
+        # nobody uses (see ui/night.py — resting is the world's turn).
         name="The Waystation",
-        desc="The Waystation: a lean-to and a banked fire on the last flat ground before "
-             "the climb. Travellers used to wait here for company before going up.",
-        features=["a banked fire ringed with stones", "a lean-to open to the road", "the ridge rising east"],
+        desc="The Waystation: a lean-to and a banked fire where the Old Road leaves town. "
+             "Travellers used to muster here for company before going up the ridge.",
+        features=["a banked fire ringed with stones", "a lean-to open to the road",
+                  "the road running east, and the ridge somewhere beyond it"],
         biome="camp",
         interactables=[
             Interactable(
@@ -225,9 +230,8 @@ def build_rooms() -> dict[str, Room]:
         ],
         obstacles={(13, 4), (14, 4)},             # a lean-to
         doors=[
-            Door(x=0, y=MIDY, to_room="road", spawn=(R - 1, MIDY)),
-            # Gating (read the map + lamps lit) is enforced in main.try_move.
-            Door(x=R, y=MIDY, to_room="ridge_foot", spawn=(1, MIDY)),
+            Door(x=0, y=MIDY, to_room="market", spawn=(R - 1, MIDY)),
+            Door(x=R, y=MIDY, to_room="road", spawn=(1, MIDY)),
         ],
     )
     # --- the ridge: a small snow-swept climb, the Gloam waiting at the top ---
@@ -240,7 +244,7 @@ def build_rooms() -> dict[str, Room]:
         biome="snow",
         obstacles={(4, 4), (14, 8)},              # snow-buried rocks
         doors=[
-            Door(x=0, y=MIDY, to_room="camp", spawn=(R - 1, MIDY)),
+            Door(x=0, y=MIDY, to_room="road", spawn=(R - 1, MIDY)),
             Door(x=9, y=GRID_H - 1, to_room="ridge_pass", spawn=(9, 1)),
         ],
     )
@@ -452,8 +456,9 @@ def build_rooms() -> dict[str, Room]:
         doors=[
             Door(x=0, y=MIDY, to_room="ridge_foot", spawn=(R - 1, MIDY)),
             Door(x=R, y=MIDY, to_room="snow_cairn", spawn=(1, MIDY)),
-            # One-way: you can go down the scree, but not back up it.
-            Door(x=9, y=GRID_H - 1, to_room="camp", spawn=(9, 2)),
+            # One-way: you can go down the scree, but not back up it. It drops to the road
+            # — the ground directly below the ridge now that the waystation sits in town.
+            Door(x=9, y=GRID_H - 1, to_room="road", spawn=(9, 2)),
         ],
     )
     snow_cairn = Room(

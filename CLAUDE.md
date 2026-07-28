@@ -155,9 +155,16 @@ Three layers enforce this, and changes usually touch all three:
 - `world.py` — the map: `Room`/`Door`, `street_lamp()`, `new_world()` builds rooms +
   `KnownEntities` + `NPC_SPAWNS`, `starter_quest()`, `ensure_world_complete()` (migrates older
   save bundles — seeds/prunes lamps, back-fills agendas, relocates anyone stranded by a map
-  change). The map is a **linear main line** `square → tavern → market → road → camp →
+  change). The map is a **linear main line** `square → tavern → market → camp → road →
   ridge_foot → ridge_pass → ridge_summit` with two optional forks (`home`/Perrin off the road,
-  `cellar` off the tavern). Rooms carry a `biome` (`"town"` | `"snow"` | `"camp"`), a list of
+  `cellar` off the tavern). **The camp sits early on purpose** — every night of the game is
+  spent there, and a camp you have to hike back to from the ridge is a camp nobody uses, so
+  the world would stop taking its turn. Two things this map arrangement is load-bearing for,
+  and which any future room shuffle must preserve: the **three ridge-gating lamps**
+  (`lamp_square`/`lamp_tavern`/`lamp_market`, all that `world.lamps` contains) must stay in
+  rooms reachable *before* the gate, or a prerequisite ends up behind its own door; and the
+  Ridge Shelf's one-way scree drop lands on `road`, the ground directly below the climb.
+  Rooms carry a `biome` (`"town"` | `"snow"` | `"camp"`), a list of
   `interactables`, and an LLM-facing **`desc`/`features`** — only the room a character is
   standing in gets described in their briefing, so the prompt doesn't balloon as the map grows.
   `GRID_W`/`GRID_H` define tile bounds.
@@ -249,11 +256,18 @@ the JSON object), raising `LLMError` on failure.
   `inventory.py` (`InventoryPanel` + in-conversation `TradePanel`), `shop.py` (`ShopPanel` —
   vendors, margin prices; opened by the trade key when talking to a `vendor`), `storage.py`
   (`StoragePanel` — the camp chest), `party.py` (`PartyPanel`), `journal.py`, `menu.py`,
-  `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural low-res pixel art,
-  nearest-scaled; no binary art committed).
+  `night.py` (`NightScene`), `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural
+  low-res pixel art, nearest-scaled; no binary art committed).
 - **Places & the day:** the camp room has `campfire`/`chest` interactables — `main.interact` →
   `use_interactable` → `engine.interact.apply_interaction`, whose effects heal, `day++` and
   restock vendors (the fire) or return `panel="storage"` (the chest → `StoragePanel`).
+- **The night is the world's turn** (`ui/night.py`). Resting at the fire is the only **cut**
+  the game has — the one moment the world may change without the player — which is the whole
+  substrate of Part 4. `main.use_interactable` captures `world.events._seq` *before* the
+  interaction (so the rest's own events aren't reported back as news), then `begin_night()`
+  builds `night_facts()`, calls `mark_rested()` and pushes `scene = "night"`. `NightScene`
+  mirrors `ui/epilogue.py`: worker thread, one short call, **authored fallback on `LLMError`**
+  — this is the path a fresh clone with no `settings.json` hits first, so keep it working.
 - **Ambient movement** (`main._ambient_step`): each idle NPC holds a runtime
   `{mode: "still"|"wander", timer}` in `Game._ambient` — **everyone starts standing still**,
   and after *every* step chooses to take another (`P_KEEP_WANDERING`, `STEP_DELAY`) or settle
@@ -280,8 +294,13 @@ the JSON object), raising `LLMError` on failure.
 
 ## Controls / key routing gotchas
 
-- Overworld: Arrows/WASD move, **E** interact, **I** inventory, **P** party, **M** map,
-  **J** journal, **Esc** menu.
+- Overworld: Arrows/WASD move, **E** interact, **R** make camp, **I** inventory, **P** party,
+  **M** map, **J** journal, **Esc** menu.
+- **`R` makes camp from anywhere** (`main.camp_action` → `camp_prompt` → `confirm_camp`).
+  It records `flags["camp_return"]` and `R` again inside camp puts you back on the exact tile
+  you left; walking out through a door clears the note, because you're plainly not coming
+  back. `_travel_to()` does everything a door does except the door, so arrivals still register
+  and `reach` objectives still fire.
 - **The map** (`engine/cartography.py` + `ui/mapview.py`) derives its layout from the graph —
   a door's position on the wall says which way it leads, so adding a room draws itself. A
   corner minimap is always up; **M** opens the full map. `waypoints()` turns each active
@@ -298,8 +317,11 @@ the JSON object), raising `LLMError` on failure.
   rests you (heal + new day + restock), the chest opens storage.
 - **Combat ACT is a free-text speech box**, not a menu — the player types what they *say* and
   it routes to `combat_agent.mercy_attempt` (or `speak_to_ally` when the target is a companion).
-- **You talk to party members through the party view (`P` → Enter), not `E`.** `E` in the
-  overworld skips companions on purpose.
+- **You talk to party members through the party view (`P` → Enter), not `E`** — `E` in the
+  overworld skips companions on purpose. **Except at camp**, where `_place_followers` stops
+  trailing them and `adjacent_targets` lets `E` through: the waystation is a place you sit
+  and talk *in*, and a companion glued to your shoulder there is scenery rather than someone
+  you go over to. The `P` route still works everywhere.
 
 ## Conventions
 
@@ -378,6 +400,48 @@ first, then content, then the ensemble — **stop for a play session after each 
   - **Epilogue** (`ui/epilogue.py`) — resolving the Gloam writes each main character an ending
     from how many agenda beats they actually closed plus what they remember of the player (one
     short call each, authored fallback per stage on `LLMError`), then returns to free play.
+
+Part 3 is complete.
+
+## Part 4 — the night, and NPCs who act (in progress)
+
+Plan: `~/.claude/plans/tender-conjuring-abelson.md`. **The diagnosis: the game had no cut.**
+Everything happened because the player was standing there, so every attempt at a world that
+moves on its own had nowhere to put itself. **Resting is the world's turn** — the player
+chooses it, it happens in one place, and it bounds cost and noise for free.
+
+Two constraints hold across the whole part:
+
+1. **Every initiative must leave a way in.** Characters may do real damage to your plans —
+   take what you wanted, close a thread, get in your way — but each act must yield something
+   the player can reach (a quest, or a discoverable change in a reachable room). This is the
+   quest-grounding invariant pointed at a new target, and it is *why* the verbs need no other
+   limit.
+2. **The offscreen act is thin; the onscreen consequence is thick.** No simulated journeys,
+   no offscreen combat resolution, no offscreen deaths. A character departs and is then
+   somewhere, in a state, with something unresolved — the interesting part happens with the
+   player there. Anything resolved offscreen is content nobody gets to play.
+
+- **Phase A (done)** — the camp and the cut. Camp moved early on the main line (`market → camp
+  → road`), `R` to make camp from anywhere, and the campfire now opens `ui/night.py:
+  NightScene` instead of resting instantly. Companions settle at camp so you can talk to them
+  there. See "The night is the world's turn" and the `R` note above.
+- **Phase B (next)** — the world's turn. `engine/initiative.py` (the actor loop: non-party
+  characters with a stale agenda beat, 1-2 per night, run from `NightScene`) and
+  `npc/nightly.py` (one narrow call each). **Initiative adds nothing to `npc/agent.py:
+  _build_prompt`** — that prompt is already crowded and every block added there makes another
+  quieter; follow `npc/interject.py` and `npc/combat_agent.py` instead. Verbs go in
+  `ACTION_SETS["offscreen"]` and validate exactly like everything else.
+
+Out of scope, deliberately: the darkening-world dial (engine-owned Gloam pressure that rooms
+read declaratively). Its own part later, so this playtest reads cleanly.
+
+**Watch for:** initiative is the same class of machine as `engine/pacing.py`, which has
+oscillated twice — it generates content *and* reads world state to decide whether to generate
+more. Keep the cap hard, keep it inside the rest, and never let something initiative created
+become an input that makes initiative fire again. And an LLM scene needs a *subject* or it
+produces pleasant mush (the same lesson as "an agenda beat must be a pursuit, not a standing
+state") — a night with nothing concrete to be about should be silent, not filler.
 
 Confirm scope with the user before starting new major work.
 

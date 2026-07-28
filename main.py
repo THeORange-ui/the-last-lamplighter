@@ -38,6 +38,7 @@ from ui.epilogue import Epilogue
 from ui.inventory import InventoryPanel
 from ui.journal import draw_journal
 from ui.mapview import draw_full_map, draw_minimap
+from ui.night import NightScene, mark_rested, night_facts
 from ui.menu import Menu
 from ui.party import PartyPanel
 from ui.storage import StoragePanel
@@ -68,6 +69,9 @@ DIRS = {
     pygame.K_DOWN: (0, 1), pygame.K_s: (0, 1),
 }
 INTERACT_KEYS = {pygame.K_e, pygame.K_SPACE, pygame.K_RETURN}
+
+CAMP_ROOM = "camp"
+CAMP_SPOT = (9, 8)          # beside the fire, not on it
 
 
 class Game:
@@ -114,6 +118,8 @@ class Game:
         self.party_panel: PartyPanel | None = None
         self.storage_open = False
         self.storage_panel: StoragePanel | None = None
+        self.night: NightScene | None = None
+        self.camp_prompt: str | None = None       # confirm text while R is pending
         self._trail: list[tuple[int, int]] = []   # player's recent tiles (for followers)
         self._ambient: dict[str, dict] = {}       # per-NPC {mode, timer}; runtime only
         self._beat_no = 0                         # notable beats, for bark cooldowns
@@ -288,8 +294,10 @@ class Game:
             tx, ty = px + dx, py + dy
             for n in self.world.npcs.values():
                 # Companions trail right behind you — don't let E perpetually snag them;
-                # you talk to party members from the party view (P) instead.
-                if n.npc_id in self.world.party:
+                # you talk to party members from the party view (P) instead. At camp they
+                # are sitting still around the fire, so E is exactly the right way to
+                # reach them, and the P route still works everywhere.
+                if n.npc_id in self.world.party and room.id != CAMP_ROOM:
                     continue
                 if n.room == room.id and (n.x, n.y) == (tx, ty):
                     return ("npc", n.npc_id)
@@ -325,6 +333,10 @@ class Game:
             if not door.passable(self.world):
                 self.set_toast(door.locked_msg or "It will not open.")
                 return
+            # Walking out of camp on your own feet means you're not coming back to
+            # wherever R plucked you from — the return note only survives a return by R.
+            if p.room == CAMP_ROOM:
+                self.world.flags.pop("camp_return", None)
             p.room = door.to_room
             p.x, p.y = door.spawn
             self._gather_party()          # companions follow you through the door
@@ -397,8 +409,15 @@ class Game:
         return None
 
     def _place_followers(self):
-        """Trail the party behind the player within the current room."""
+        """Trail the party behind the player within the current room.
+
+        Not at camp. The waystation is where the night is spent and where companions are
+        meant to be talked *to*, so they settle around the fire and stay put — a
+        companion glued to your shoulder is scenery, not somebody you go and sit with.
+        """
         p = self.world.player
+        if p.room == CAMP_ROOM:
+            return
         taken = {(p.x, p.y)}
         for i, nid in enumerate(self.world.party):
             npc = self.world.npcs.get(nid)
@@ -732,6 +751,9 @@ class Game:
     def use_interactable(self, inter):
         """Every lamp, fire, chest and puzzle goes through here (engine/interact.py)."""
         room = self.rooms[self.world.player.room]
+        # Taken before the interaction so the rest's own events aren't reported back to
+        # the player as news about the day they just had.
+        pre_seq = self.world.events._seq
         result = apply_interaction(self.world, inter, room.name)
         if result.message:
             self.set_toast(result.message)
@@ -750,8 +772,61 @@ class Game:
             self.storage_open = True
         if any(k == "rest" for k, _ in events):
             self.progress("rest")
+            self.begin_night(pre_seq)
         if result.quests_dirty:
             self.on_quests_completed(refresh_and_complete(self.world, self.known))
+
+    def begin_night(self, upto_seq: int):
+        """The world's turn. Resting is the only cut this game has — see ui/night.py."""
+        facts = night_facts(self.world, upto_seq)
+        mark_rested(self.world, upto_seq)
+        self.night = NightScene(self.world, facts)
+        self.scene = "night"
+
+    # --- making camp -------------------------------------------------------
+    def camp_action(self):
+        """R. Travel to the waystation, or go back to where you left off.
+
+        The camp is where every night of the game is spent, and a camp you have to hike
+        back to is a camp nobody uses — if resting costs a round trip from the ridge,
+        players stop resting and the world stops taking its turn.
+        """
+        if self.world.player.room == CAMP_ROOM:
+            back = self.world.flags.get("camp_return")
+            if not back:
+                self.set_toast("You are already at the waystation.")
+                return
+            where = self.rooms[back["room"]].name if back["room"] in self.rooms else "where you were"
+            self.camp_prompt = f"Break camp and head back to {where}?"
+        else:
+            self.camp_prompt = "Make camp? You will travel to the Waystation."
+
+    def confirm_camp(self):
+        """Act on a pending R. Travelling out and back is the same move both ways."""
+        self.camp_prompt = None
+        w = self.world
+        if w.player.room == CAMP_ROOM:
+            back = w.flags.pop("camp_return", None)
+            if not back:
+                return
+            self._travel_to(back["room"], back["x"], back["y"])
+            self.set_toast("You break camp.")
+        else:
+            w.flags["camp_return"] = {"room": w.player.room,
+                                      "x": w.player.x, "y": w.player.y}
+            self._travel_to(CAMP_ROOM, *CAMP_SPOT)
+            self.set_toast("You make camp at the waystation.")
+
+    def _travel_to(self, room_id: str, x: int, y: int):
+        """Put the player (and the party) somewhere without walking there. Everything a
+        door does except the door — so arrivals still register and 'reach' still fires."""
+        p = self.world.player
+        p.room, p.x, p.y = room_id, x, y
+        self._trail.clear()
+        self._gather_party()
+        self._record_arrival()
+        self.try_pickup()
+        self.on_quests_completed(refresh_and_complete(self.world, self.known))
 
     def open_dialogue(self, npc_id):
         # No scripted onboarding. The only authored quest is "find Wren"; the lamps
@@ -811,6 +886,14 @@ class Game:
                             self.on_combat_end(self.combat_scene.outcome)
                     else:
                         self.combat_scene.handle_event(event)
+            elif self.scene == "night":
+                if self.night:
+                    self.night.handle_event(event)
+            elif self.camp_prompt is not None and event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_y, pygame.K_r) or event.key in INTERACT_KEYS:
+                    self.confirm_camp()
+                elif event.key in (pygame.K_n, pygame.K_ESCAPE):
+                    self.camp_prompt = None
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if self.map_open:
@@ -830,6 +913,8 @@ class Game:
                 elif event.key == pygame.K_p and not (self.journal_open or self.map_open):
                     self.party_panel = PartyPanel(self.world)
                     self.party_open = True
+                elif event.key == pygame.K_r and not (self.journal_open or self.map_open):
+                    self.camp_action()
                 elif not (self.journal_open or self.map_open) and event.key in INTERACT_KEYS:
                     self.interact()
 
@@ -844,7 +929,8 @@ class Game:
         if self.inventory_open or self.party_open or self.storage_open:
             return
 
-        if self.scene == "overworld" and not (self.journal_open or self.map_open):
+        if self.scene == "overworld" and not (self.journal_open or self.map_open
+                                              or self.camp_prompt):
             self.move_timer -= dt
             if self.move_timer <= 0:
                 keys = pygame.key.get_pressed()
@@ -869,6 +955,9 @@ class Game:
         elif self.scene == "epilogue" and self.epilogue and self.epilogue.finished:
             self.epilogue = None
             self.scene = "overworld"       # a lit Emberhold, still yours to walk
+        elif self.scene == "night" and self.night and self.night.finished:
+            self.night = None
+            self.scene = "overworld"       # morning, at the fire you slept by
 
     # --- draw -------------------------------------------------------------
     def draw(self):
@@ -887,6 +976,8 @@ class Game:
             self.draw_intro()
         elif self.scene == "epilogue" and self.epilogue:
             self.epilogue.draw(self.screen)
+        elif self.scene == "night" and self.night:
+            self.night.draw(self.screen)
         elif self.scene == "dialogue" and self.dialogue:
             self.dialogue.draw(self.screen)
 
@@ -905,10 +996,27 @@ class Game:
         if self.menu_open:
             self.menu.draw(self.screen, self.save_name)
 
+        if self.camp_prompt and self.scene == "overworld":
+            self.draw_camp_prompt()
         if self._bark and self.scene == "overworld":
             self.draw_bark()
         if self.toast_timer > 0:
             self.draw_toast()
+
+    def draw_camp_prompt(self):
+        lines = [self.camp_prompt, "Enter / R — yes      Esc — no"]
+        font, small = T.font(18, bold=True), T.font(14)
+        w = max(font.size(lines[0])[0], small.size(lines[1])[0]) + 40
+        box = pygame.Rect(0, 0, w, 78)
+        box.center = (T.SCREEN_W // 2, T.SCREEN_H // 2)
+        s = pygame.Surface(box.size, pygame.SRCALPHA)
+        s.fill((0, 0, 0, 225))
+        self.screen.blit(s, box.topleft)
+        pygame.draw.rect(self.screen, T.HEARTH, box, 2)
+        draw_text(self.screen, lines[0], (box.centerx, box.y + 18), font, T.TEXT,
+                  center=True)
+        draw_text(self.screen, lines[1], (box.centerx, box.y + 46), small, T.TEXT_DIM,
+                  center=True)
 
     def draw_toast(self):
         img = T.font(17, bold=True).render(self.toast, True, T.TEXT)

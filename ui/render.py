@@ -220,5 +220,6 @@ def draw_hud(screen, world, rooms, hint=""):
         draw_text(screen, hint, (T.SCREEN_W - 14, T.PLAY_H + 50),
                   T.font(15, bold=True), T.TEXT_GOOD, right=True)
     else:
-        draw_text(screen, "WASD · E talk · I items · P party · J journal · Esc menu",
+        draw_text(screen,
+                  "WASD · E talk · R camp · I items · P party · M map · J journal · Esc menu",
                   (T.SCREEN_W - 14, T.PLAY_H + 50), T.font(13), T.TEXT_DIM, right=True)
