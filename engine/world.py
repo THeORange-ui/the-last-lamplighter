@@ -578,6 +578,18 @@ NPC_SPAWNS = {
 }
 
 
+def ridge_open(state: WorldState) -> bool:
+    """Is the climb passable? Every lamp lit and Ansel's map read.
+
+    Lives here rather than in the UI because two very different callers need the same
+    answer: the door in `main.try_move`, and `engine/initiative.py`, which must not send
+    a character up a mountain the player has no way to follow them onto.
+    """
+    if state.flags.get("gloam_resolved"):
+        return True
+    return bool(state.flags.get("map_read")) and state.lit_lamp_count() == len(state.lamps)
+
+
 def known_entities(rooms: dict[str, Room], npc_ids) -> KnownEntities:
     return KnownEntities(
         rooms=set(rooms.keys()),

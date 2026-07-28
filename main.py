@@ -29,7 +29,7 @@ from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
 from npc.agenda import note_quest_done
 from npc.bonds import bond_for
 from npc.interject import choose_interjector, interject
-from engine.world import NPC_SPAWNS, PRIVATE_ROOMS, RIDGE_ROOMS
+from engine.world import NPC_SPAWNS, PRIVATE_ROOMS, RIDGE_ROOMS, ridge_open
 from engine.world import ensure_world_complete, new_world
 from npc.memory import NPCMemory
 from npc.roster import character_name
@@ -609,10 +609,7 @@ class Game:
 
     # --- ridge / combat ---------------------------------------------------
     def _ridge_open(self) -> bool:
-        w = self.world
-        if w.flags.get("gloam_resolved"):
-            return True
-        return bool(w.flags.get("map_read")) and w.lit_lamp_count() == len(w.lamps)
+        return ridge_open(self.world)
 
     def _ridge_locked_msg(self) -> str:
         w = self.world
@@ -782,7 +779,7 @@ class Game:
         """The world's turn. Resting is the only cut this game has — see ui/night.py."""
         facts = night_facts(self.world, upto_seq)
         mark_rested(self.world, upto_seq)
-        self.night = NightScene(self.world, facts)
+        self.night = NightScene(self.world, facts, self.rooms, self.known)
         self.scene = "night"
 
     # --- making camp -------------------------------------------------------
@@ -958,8 +955,14 @@ class Game:
             self.epilogue = None
             self.scene = "overworld"       # a lit Emberhold, still yours to walk
         elif self.scene == "night" and self.night and self.night.finished:
+            reports = self.night.reports
             self.night = None
             self.scene = "overworld"       # morning, at the fire you slept by
+            # The world moved while you slept: someone may have asked for something, and
+            # someone may have walked off with what a quest was counting.
+            self.on_quests_completed(refresh_and_complete(self.world, self.known))
+            if reports:
+                self.set_toast("Word reached you in the night — see your journal.")
 
     # --- draw -------------------------------------------------------------
     def draw(self):

@@ -436,15 +436,49 @@ Two constraints hold across the whole part:
   → road`), `R` to make camp from anywhere, and the campfire now opens `ui/night.py:
   NightScene` instead of resting instantly. Companions settle at camp so you can talk to them
   there. See "The night is the world's turn" and the `R` note above.
-- **Phase B (next)** — the world's turn. `engine/initiative.py` (the actor loop: non-party
-  characters with a stale agenda beat, 1-2 per night, run from `NightScene`) and
-  `npc/nightly.py` (one narrow call each). **Initiative adds nothing to `npc/agent.py:
-  _build_prompt`** — that prompt is already crowded and every block added there makes another
-  quieter; follow `npc/interject.py` and `npc/combat_agent.py` instead. Verbs go in
-  `ACTION_SETS["offscreen"]` and validate exactly like everything else.
+- **Phase B (done)** — the world's turn, inside the night.
+  - `engine/initiative.py` — the actor loop, run from `NightScene._run` *before* the
+    narration, so the prose describes a world that has already moved. `candidates()` picks
+    at most `MAX_ACTORS` (2), skipping party members (**their arc advances with you — that
+    exclusion is what makes who you travel with a real choice**), anyone in the player's own
+    room, anyone standing somewhere the player couldn't find, and anyone with no open agenda
+    beat. `pressure()` is built from what already exists (`agenda` `stale` + `pacing` neglect),
+    never a new metric.
+  - **Nobody may be picked two nights running.** `note_asked()` spends a character's turn even
+    when they decline — without it, a character who always says no sat at the top of the queue
+    forever and took a slot from everyone else every night (Perrin, five nights running).
+    `note_acted()` additionally resets `stale`, because acting *is* the beat moving.
+  - `npc/nightly.py` — one narrow call per actor, its own small prompt. **Initiative adds
+    nothing to `npc/agent.py: _build_prompt`**; follow `npc/interject.py` and
+    `npc/combat_agent.py` instead. Doing nothing is a first-class answer and the prompt says
+    so twice, because a model handed a menu will pick from it.
+  - `ACTION_SETS["offscreen"]` = `go` / `take` / `leave` / `request_help` / `tell`, gated by
+    the same `allowed_actions()` check as every character kind, so an offscreen verb can never
+    fire in dialogue and a conversational verb can never fire at night (`apply_actions(...,
+    as_kind="offscreen")`). **`use` is deliberately absent** — the obvious offscreen act for a
+    lamplighter is lighting a lamp, and the three lamps gate the ridge. Asking is
+    `request_help`, not `give_quest`: railed to fetch/deliver/talk_to at count 1, one open ask
+    per character, which is what stops the world posting an errand every time you sleep.
+  - **The way-in invariant is enforced before applying, not by rolling back.**
+    `legal_rooms()` only ever offers rooms the player has visited or could walk one door into,
+    excludes `ridge_summit` always and the snow rooms until `world.ridge_open()`, and only
+    characters standing somewhere findable are candidates — so a validated act is a
+    discoverable one by construction. `take` additionally refuses an item an active
+    fetch/deliver quest needs, which is a soft-lock guard, not a limit on getting in your way.
+  - Reports are **the engine's own words**, never the model's, so a night can't describe
+    something that didn't happen. The actor gets the first-person memory and bystanders get
+    the third-person one — handing `first_person` to everyone present is the
+    reversed-perspective bug in a new place, and it had Wren remembering passing word to
+    herself.
 
 Out of scope, deliberately: the darkening-world dial (engine-owned Gloam pressure that rooms
 read declaratively). Its own part later, so this playtest reads cleanly.
+
+**Known and left alone for now:** only `main`/`vendor` characters ever act at night, because
+`pressure()` needs an open agenda beat and the four `minor` characters have no agenda. That
+matches what minors are for (colour, one railed favour) and several have premises that keep
+them put — Tilda cannot leave the outfarm. Worth revisiting only if the nights feel thin.
+Measured on a five-night run: roughly three or four nights in five hold something.
 
 **Watch for:** initiative is the same class of machine as `engine/pacing.py`, which has
 oscillated twice — it generates content *and* reads world state to decide whether to generate

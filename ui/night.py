@@ -8,9 +8,11 @@ Resting at the waystation fire is that cut. The player chooses it, which makes i
 it happens in one place, which bounds it; and "things happen while you sleep" is a rule
 nobody needs explained.
 
-Phase A (here) makes the night a scene and reports the day that just ended, written from
-what the world already recorded. Phase B hangs the world's turn off the same moment —
-characters elsewhere act, and the morning is where the player hears about it.
+The night now holds two things. First the **world takes its turn** — up to two characters
+elsewhere act on their own (engine/initiative.py), and the engine writes down what
+changed. Then the night is narrated, with those changes handed to it as things word of
+which reached the fire. The order matters: the narration describes a world that has
+already moved, so it can never promise something that didn't happen.
 
 One short LLM call, with an authored fallback on `LLMError`: a night that doesn't arrive
 is worse than a plain one, and this is the code path a fresh clone with no settings.json
@@ -22,6 +24,7 @@ import threading
 
 import pygame
 
+from engine.initiative import run_night
 from llm.client import LLMError, complete_json
 from ui import theme as T
 from ui.render import draw_text, wrap_text
@@ -65,19 +68,26 @@ def write_night(world, facts: dict) -> str:
     already does that, and a night that reads like a log is not a night."""
     from npc.roster import character_name
     who = ", ".join(character_name(n) for n in facts["party"]) or "nobody"
+    moved = facts.get("world_turn") or []
     system = (
         "You are narrating a single night's rest at a roadside waystation, in a town "
         "held in permanent dusk. Two or three sentences, second person, plain and "
         "unhurried. Describe the night and the fire, and let what the day held sit "
         "underneath it rather than listing anything. No bullet points, no summary of "
         "tasks, no encouragement, no questions. "
-        'Reply as JSON: {"line": "<two or three sentences>"}'
+        + ("If word reached you overnight about what someone else did, work it in — "
+           "plainly, as something you heard or noticed, without explaining what it "
+           "means or what to do about it. State only what you are told; invent no "
+           "further detail about it. " if moved else "")
+        + 'Reply as JSON: {"line": "<two or three sentences>"}'
     )
     user = (
         f"It is the end of day {facts['day'] - 1}, at the waystation fire.\n"
         f"Who is at the fire with you: {who}\n"
         "What the day held, in the order it happened:\n"
         + ("\n".join(f"- {t}" for t in facts["events"]) or "- nothing worth the telling")
+        + ("\nWord that reached you in the night:\n"
+           + "\n".join(f"- {m}" for m in moved) if moved else "")
     )
     try:
         out = complete_json(system, user, temperature=0.8, max_tokens=180,
@@ -88,17 +98,33 @@ def write_night(world, facts: dict) -> str:
 
 
 class NightScene:
-    """Writes the night on a worker thread, shows it, then hands back the morning."""
+    """Runs the world's turn, writes the night, shows it, then hands back the morning.
 
-    def __init__(self, world, facts: dict):
+    Both happen on one worker thread while the fade is on screen, which is why the
+    latency of two or three LLM calls costs nothing here: the player is watching a
+    night pass, and a night is supposed to take a moment.
+    """
+
+    def __init__(self, world, facts: dict, rooms=None, known=None):
         self.world = world
         self.facts = facts
+        self.rooms = rooms
+        self.known = known
         self.line = ""
+        self.reports: list[str] = []
         self.ready = False
         self.finished = False
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
+        # The world moves first, then gets narrated — so the prose describes something
+        # that has already happened rather than promising something that hasn't.
+        if self.rooms is not None and self.known is not None:
+            try:
+                self.reports = run_night(self.world, self.rooms, self.known)
+            except Exception:
+                self.reports = []
+            self.facts["world_turn"] = self.reports
         try:
             self.line = write_night(self.world, self.facts)
         except Exception:

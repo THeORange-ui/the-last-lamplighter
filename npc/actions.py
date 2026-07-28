@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from engine.items import display_name
 from engine.quests import (QuestValidationError, build_quest, build_simple_quest,
                            find_check_back, open_request_from)
+from engine.state import GroundItem
 from engine.world import GRID_H, GRID_W, RIDGE_ROOMS, Room
 from npc.roster import character_name
 
@@ -127,7 +128,48 @@ ACTIONS: dict[str, str] = {
         '- {"type": "end_dialogue"}\n'
         "    End the conversation naturally."
     ),
+    # --- offscreen only: the world's turn, while the player sleeps -------------
+    # These never appear in a conversation. They are the whole vocabulary a character
+    # has for acting on their own (engine/initiative.py, npc/nightly.py).
+    "go": (
+        '- {"type": "go", "room": "<room id>", "why": "<short, in your own words>"}\n'
+        "    Walk somewhere overnight and stay there. Only rooms from the list you were\n"
+        "    given — anywhere else is somewhere the outsider could never follow you to.\n"
+        "    This is a real move: you are gone from where you were, and whoever comes\n"
+        "    looking will find you where you went."
+    ),
+    "take": (
+        '- {"type": "take", "item": "<item id>", "why": "<short>"}\n'
+        "    Pick up something lying where you are and keep it. Only things actually on\n"
+        "    the ground in your room. It is yours afterwards — if someone wants it they\n"
+        "    will have to ask you for it."
+    ),
+    "leave": (
+        '- {"type": "leave", "item": "<item id>", "why": "<short>"}\n'
+        "    Set something down here and walk away from it, out of your own pack. It stays\n"
+        "    where you put it for anyone to find."
+    ),
 }
+
+# What a character may do on their own, at night, with nobody watching. Deliberately
+# small: enough to change the board, never enough to settle anything. There is no verb
+# for fighting, for being hurt, or for finishing a thing — the interesting half is
+# supposed to happen later, with the player in the room.
+#
+# `use` is not here on purpose. Lighting a lamp is the obvious offscreen act for a
+# lamplighter, and it is exactly the wrong one: the three lamps gate the ridge, so an
+# NPC lighting them hands the player a prerequisite they were meant to earn.
+#
+# Asking for help is `request_help`, not `give_quest`: railed by `build_simple_quest` to
+# fetch/deliver/talk_to at count 1, and limited to one outstanding ask per character by
+# `open_request_from`. A note that arrives overnight, with nobody there to discuss it,
+# should be a small concrete favour — and the one-at-a-time rule is what stops the world
+# posting a fresh errand every time the player sleeps.
+#
+# Order is deliberate: `tell` renders last because it is the cheapest thing a character
+# can do — it commits to nothing and leaves nothing to walk into — and in the first live
+# run it crowded out every other verb, six times in five nights.
+OFFSCREEN_ACTIONS = ["go", "take", "leave", "request_help", "tell"]
 
 # Which actions each kind of character may use. A `main` character is a full agent
 # (quests, companionship, the works); a `vendor` mostly trades; a `minor` throwaway
@@ -144,6 +186,10 @@ ACTION_SETS: dict[str, list[str]] = {
                "request_help", "set_goal", "resolve_goal", "tell", "end_dialogue"],
     "minor": ["adjust_affinity", "reveal_fact", "use_item", "request_help", "tell",
               "end_dialogue"],
+    # Not a character kind — the vocabulary of the world's turn. Gated through the same
+    # `allowed_actions()` check as everything else, so these can never fire in dialogue
+    # and a conversational action can never fire at night.
+    "offscreen": OFFSCREEN_ACTIONS,
 }
 
 # Legacy action aliases → their current name (kept so older prompts/saves still work).
@@ -214,7 +260,14 @@ def _free_interior_tile(room: Room, blocked: set[tuple[int, int]]) -> tuple[int,
     return (1, 1)
 
 
-def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
+def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") -> ActionResult:
+    """Validate and apply one turn's proposed actions.
+
+    `as_kind` overrides the character's own vocabulary. The only caller that passes it
+    is the world's turn (`as_kind="offscreen"`), which needs a different set of verbs
+    from the same character — the gate is the mechanism either way, so an offscreen verb
+    can never fire in dialogue and a conversational one can never fire at night.
+    """
     result = ActionResult()
     name = character_name(npc_id)
     if not isinstance(actions, list):
@@ -222,10 +275,13 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
 
     # Gate by character kind: an action this kind may not use is dropped, never applied.
     from npc.roster import load_character
-    try:
-        kind = load_character(npc_id).get("kind", "main")
-    except KeyError:
-        kind = "main"
+    if as_kind:
+        kind = as_kind
+    else:
+        try:
+            kind = load_character(npc_id).get("kind", "main")
+        except KeyError:
+            kind = "main"
     allowed = allowed_actions(kind)
 
     for raw in actions[:_MAX_ACTIONS]:
@@ -284,10 +340,20 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
             if state.has_quest(quest.id):
                 continue
             state.quests.append(quest)
-            state.events.record("quest_start", f"{name} asked you for help: “{quest.title}”.")
-            _note(result, f"{name} asks a favour of you: “{quest.title}”.",
-                  f"You asked them a favour: “{quest.title}”.",
-                  f"{name} asked the player a favour: “{quest.title}”.")
+            if kind == "offscreen":
+                # Nobody handed this over in person — word of it arrived overnight.
+                state.events.record("quest_start",
+                                    f"Word from {name}: “{quest.title}”.")
+                _note(result, f"Word reached you from {name}, asking for help: "
+                              f"“{quest.title}”.",
+                      f"You sent word asking for help: “{quest.title}”.",
+                      f"{name} sent word asking for help: “{quest.title}”.")
+            else:
+                state.events.record("quest_start",
+                                    f"{name} asked you for help: “{quest.title}”.")
+                _note(result, f"{name} asks a favour of you: “{quest.title}”.",
+                      f"You asked them a favour: “{quest.title}”.",
+                      f"{name} asked the player a favour: “{quest.title}”.")
 
         elif atype == "complete_quest":
             qid = str(raw.get("quest_id", "")).strip()
@@ -496,7 +562,78 @@ def apply_actions(state, npc_id, actions, known, rooms) -> ActionResult:
         elif atype == "end_dialogue":
             result.end_dialogue = True
 
+        # --- the world's turn (offscreen only; see engine/initiative.py) ---------
+        elif atype == "go":
+            room_id = str(raw.get("room", "")).strip()
+            room = rooms.get(room_id)
+            legal = _legal_rooms(state, rooms, npc_id)
+            if room is None or room_id not in legal:
+                # Not a taste judgement: a room off this list is one the player has no
+                # way to walk into, so going there would be vanishing, not moving.
+                result.debug.append(f"dropped go to {room_id!r}: not reachable by the player")
+                continue
+            npc = state.npcs[npc_id]
+            was = rooms[npc.room].name if npc.room in rooms else npc.room
+            npc.room = room_id
+            npc.x, npc.y = _free_interior_tile(room, room.blocked())
+            _note(result, f"{name} is no longer at {was} — they went to {room.name}.",
+                  f"You left {was} and went to {room.name}{_why(raw)}",
+                  f"{name} left {was} for {room.name}.")
+
+        elif atype == "take":
+            item = str(raw.get("item", "")).strip()
+            npc = state.npcs[npc_id]
+            lying = next((g for g in state.ground_items_in(npc.room) if g.item == item), None)
+            if lying is None:
+                result.debug.append(f"dropped take {item!r}: not lying in {npc.room}")
+                continue
+            if _is_quest_target(state, item):
+                # Pocketing the very thing an open quest asks the player to fetch would
+                # leave that quest with no way to finish. They may still get in your way
+                # — just not by breaking something the engine promised you could do.
+                result.debug.append(f"dropped take {item!r}: an open quest needs it")
+                continue
+            state.ground_items.remove(lying)
+            npc.inventory.append(item)
+            label = display_name(item)
+            here = rooms[npc.room].name if npc.room in rooms else npc.room
+            _note(result, f"{name} has taken the {label} that was at {here}.",
+                  f"You picked up the {label} at {here} and kept it{_why(raw)}",
+                  f"{name} took the {label} from {here}.")
+
+        elif atype == "leave":
+            item = str(raw.get("item", "")).strip()
+            npc = state.npcs[npc_id]
+            if item not in npc.inventory:
+                result.debug.append(f"dropped leave {item!r}: not carrying it")
+                continue
+            npc.inventory.remove(item)
+            state.ground_items.append(GroundItem(room=npc.room, x=npc.x, y=npc.y, item=item))
+            label = display_name(item)
+            here = rooms[npc.room].name if npc.room in rooms else npc.room
+            _note(result, f"{name} has left the {label} at {here}.",
+                  f"You set the {label} down at {here} and left it{_why(raw)}",
+                  f"{name} left the {label} at {here}.")
+
         else:
             result.debug.append(f"unknown action type {atype!r}")
 
     return result
+
+
+def _why(raw: dict) -> str:
+    """The actor's own stated reason, tacked onto their own memory only. It is their
+    motive, not a world fact, so it never reaches the journal or anyone else's briefing.
+    """
+    why = str(raw.get("why", "")).strip().rstrip(".")[:160]
+    return f" — {why}." if why else ""
+
+
+def _is_quest_target(state, item: str) -> bool:
+    return any(q.objective.target == item and q.objective.type in ("fetch", "deliver")
+               for q in state.active_quests())
+
+
+def _legal_rooms(state, rooms, npc_id: str) -> set[str]:
+    from engine.initiative import legal_rooms
+    return set(legal_rooms(state, rooms, npc_id))
