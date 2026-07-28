@@ -14,7 +14,7 @@ import pygame
 from engine.combat import combatant_from_npc, enemies_from_ids, make_combat
 from engine.interact import apply_interaction, is_live
 from engine.items import CURRENCY, display_name, use_item
-from engine.quests import find_check_back, refresh_and_complete
+from engine.quests import CHECK_BACK, find_check_back, refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
                          wipe_all_saves)
 from engine.state import GroundItem
@@ -243,8 +243,12 @@ class Game:
                 )
                 # Their own goal just moved — make sure they notice next time you talk.
                 note_quest_done(self.world, q.giver, q.title)
-        if completed:
+        # Going to see somebody because a note told you to is not progress. Counting
+        # it as such made the notes self-perpetuating: clear one, earn a tick, get
+        # handed the next.
+        if any(q.objective.type != CHECK_BACK for q in completed):
             self.progress("quest")
+        if completed:
             self._auto_commission()
 
     def progress(self, kind: str):

@@ -19,14 +19,29 @@ Two mechanisms here, pulling opposite ways on the same problem:
 
 The heartbeat deliberately favours characters the player has never met, so the cast
 is introduced as a drip rather than eight strangers all wanting something on day one.
+
+**It is easy to overdo, and overdoing it is worse than not doing it.** The first
+calibration counted every newly-seen room as one whole unit of progress and let a
+heartbeat fire every second unit, so ten minutes of exploring the twenty-room map
+produced four "Check on X" notes. Worse, those notes counted as *load*, so every
+character the player then met believed they were snowed under and politely declined
+to ask for anything — the world filled up with errands to go and be told nothing.
+Hence: progress is **weighted** (a finished quest is worth three rooms), a note is
+**not** work and is excluded from the load count, and only one may be outstanding.
 """
 from __future__ import annotations
 
 from engine.quests import CHECK_BACK, Objective, Quest, Reward
 
-THREAD_CAP = 4          # at or above this many open threads, the world stays quiet
-MIN_GAP = 2             # ticks between heartbeats, so they don't arrive in a clump
-QUIET_TICKS = 2         # how long since you last spoke before someone gets restless
+THREAD_CAP = 4          # real, workable threads before the world stays quiet
+MIN_GAP = 6             # progress *points* between heartbeats (see WEIGHTS)
+QUIET_TICKS = 4         # points since you last spoke before someone gets restless
+MAX_OPEN_NOTES = 1      # outstanding "go and see someone" notes allowed at once
+
+# Not all progress is equal. Walking into a new room is a step; finishing something
+# somebody asked of you is an event. Counting them the same made exploration alone
+# drive the whole pacing system.
+WEIGHTS = {"quest": 3, "rest": 2, "room": 1}
 
 
 # --- the tick ---------------------------------------------------------------
@@ -35,8 +50,8 @@ def tick(state) -> int:
 
 
 def bump_tick(state, kind: str = "") -> int:
-    """One unit of progress happened. Returns the new tick."""
-    t = tick(state) + 1
+    """Progress happened, worth `WEIGHTS[kind]` points. Returns the new total."""
+    t = tick(state) + WEIGHTS.get(kind, 1)
     state.flags["tick"] = t
     return t
 
@@ -50,18 +65,20 @@ def note_talked(state, npc_id: str) -> None:
 
 # --- load -------------------------------------------------------------------
 def open_threads(state) -> list:
-    """Everything the player is currently carrying, breadcrumbs included — a
-    "go and see someone" note is a thread as much as a fetch quest is."""
-    return list(state.active_quests())
+    """Actual *work* the player is carrying — errands, journeys, things to fetch.
+
+    Notes to go and see somebody are deliberately not counted. They used to be, and
+    it fed back on itself viciously: the world dropped a note, the note counted as
+    load, the load told everyone to hold off asking, so the only things left open
+    were notes — and each one the player cleared freed the slot for the next.
+    """
+    return [q for q in state.active_quests() if q.objective.type != CHECK_BACK]
 
 
-def thread_summary(state) -> str:
-    from npc.roster import character_name
-    out = []
-    for q in open_threads(state):
-        who = f" (for {character_name(q.giver)})" if q.giver else ""
-        out.append(f"“{q.title}”{who}")
-    return "; ".join(out)
+def open_notes(state) -> list:
+    """The 'go and see someone' notes: heartbeats and check-back breadcrumbs alike.
+    Not work, but still something the player is holding, so it caps itself."""
+    return [q for q in state.active_quests() if q.objective.type == CHECK_BACK]
 
 
 # --- arc parity -------------------------------------------------------------
@@ -115,10 +132,13 @@ def _candidates(state) -> list[str]:
     cast instead of pestering whoever happens to be first in the roster.
     """
     now = tick(state)
+    seen_rooms = set(state.flags.get("visited") or [])
     unmet, known = [], []
     for npc_id, npc in state.npcs.items():
         if npc_id == "gloam" or _has_own_thread(state, npc_id):
             continue
+        if npc.room not in seen_rooms:
+            continue        # word doesn't reach you from a corner you've never walked
         if not npc.talked_to:
             unmet.append((_nudges(state, npc_id), npc_id))
             continue
@@ -165,8 +185,12 @@ def heartbeat(state) -> Quest | None:
     """
     if len(open_threads(state)) >= THREAD_CAP:
         return None
+    if len(open_notes(state)) >= MAX_OPEN_NOTES:
+        return None          # already owed a visit; don't stack another on top
     now = tick(state)
-    if now - int(state.flags.get("last_heartbeat", -MIN_GAP)) < MIN_GAP:
+    # Default 0, not -MIN_GAP: the very first step into the world should not come
+    # with a note attached before the player has met a single person.
+    if now - int(state.flags.get("last_heartbeat", 0)) < MIN_GAP:
         return None
     for npc_id in _candidates(state):
         quest = make_heartbeat_quest(state, npc_id)
@@ -190,41 +214,47 @@ def restraint(state, npc_id: str) -> str:
     "free"  — nothing much open and this arc is not ahead; asking is natural
 
     Calibration matters in both directions: blanket restraint would bring back the
-    stalled-arc problem this was built to fix.
+    stalled-arc problem this was built to fix. This is an *engine* judgement — it
+    steers how hard the prompt leans, and is never shown to the character as a tally
+    of what the player is carrying (see `prompt_block`).
     """
     threads = len(open_threads(state))
     mine, avg = arc_standing(state, npc_id)
     if threads >= THREAD_CAP or mine > avg + 0.5:
         return "hold"
-    return "easy" if threads >= 2 else "free"
+    return "easy" if threads >= 3 else "free"
 
 
 def prompt_block(state, npc_id: str) -> str:
-    """Everything a character should know about the shape of the player's game."""
-    threads = open_threads(state)
+    """What a character should know about their own position — and nothing more.
+
+    This block used to list the player's open quests by name, so that the character
+    could weigh their load. They weighed it out loud: "though you've already got
+    Wren's lamps to mind". A townsman who recites your quest log is not a person, and
+    the knowledge wasn't his to have. Restraint is still applied — it is just felt
+    from this side of the conversation, as the character's own reticence, and the
+    engine keeps the arithmetic to itself.
+    """
     mine, avg = arc_standing(state, npc_id)
-    out = ["\n# The player's plate",
-           f"They are carrying {len(threads)} open thing(s) right now"
-           + (f": {thread_summary(state)}" if threads else ".")]
-    if len(threads) >= THREAD_CAP:
+    out = ["\n# Asking things of them"]
+    if len(open_threads(state)) >= THREAD_CAP:
         out.append(
-            "That is a full load. Do NOT add to it — no new tasks this turn, however "
-            "much you want one done. Talk, help, react; let them finish something first."
-        )
-    elif len(threads) >= 2:
-        out.append(
-            "They have enough on. Only ask for something if it genuinely cannot wait."
+            "Whatever is on your mind can keep for now. Do not set them a task this "
+            "turn — talk, help, react. Not everything has to be asked today."
         )
     if mine > avg + 0.5:
         out.append(
-            f"Your own story with them is further along than most people's here "
-            f"({mine} of your aims settled, against {avg:.1f} on average). You have had "
-            "more than your share of their time. Ease off — let them go and be somewhere "
-            "else for a while. Pointing them at someone who needs them more is a "
-            "perfectly good thing to do."
+            "You have already had more than your share of this person's time. Ease "
+            "off — let them go and be somewhere else for a while. Pointing them at "
+            "someone who needs them more is a perfectly good thing to do."
         )
     out.append(
         "Never hand over a task just because they look free. A person asks for help "
         "when they need it, not to fill an empty afternoon."
+    )
+    out.append(
+        "You have no idea what else they have promised anyone. You know only what "
+        "you have seen yourself or been told. Do not mention, tally, or make "
+        "allowances for errands other people have set them."
     )
     return "\n".join(out) + "\n"

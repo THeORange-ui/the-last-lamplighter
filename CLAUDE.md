@@ -120,20 +120,32 @@ Three layers enforce this, and changes usually touch all three:
   line ran away with the whole game, because starting anything only ever happened in
   conversation and the player was always in a conversation with her. Two mechanisms pull
   against that:
-  - the **tick** — a composite progress counter (quests finished, nights rested, rooms newly
-    seen), not elapsed time, so pacing tracks what the player *does*;
-  - the **heartbeat** — on a tick, if fewer than `THREAD_CAP` (4) threads are open, the world
-    drops a "Check on X" breadcrumb for a *neglected* character. It's a `CHECK_BACK` quest
-    with **no parent**, which is how `agent._commission_block` tells it from a follow-up.
-    Creating one costs **no LLM call**; the call happens if the player goes and knocks.
-    Candidates are ordered strangers-first and least-nudged-first, so the cast is introduced
-    as a drip and nobody gets pestered twice; anyone the player is *already* being pointed at
-    is skipped.
-  - `prompt_block()` tells the speaking character the player's open-thread count and how far
-    their own arc has come against the cast average, and `restraint()` grades that into
-    `hold`/`easy`/`free`, which `_commission_block` uses to decide how hard to lean on "leave
-    it there for now". **Calibrate in both directions** — blanket restraint just reinstates
-    the stalled-arc bug.
+  - the **tick** — a composite progress counter, not elapsed time, so pacing tracks what the
+    player *does*. Progress is **weighted** (`WEIGHTS`: quest 3, rest 2, room 1) — counting a
+    newly-seen room the same as a finished quest let bare exploration of a 20-room map drive
+    the entire system.
+  - the **heartbeat** — every `MIN_GAP` (6) points, if fewer than `THREAD_CAP` (4) threads are
+    open, the world drops a "Check on X" breadcrumb for a *neglected* character. It's a
+    `CHECK_BACK` quest with **no parent**, which is how `agent._commission_block` tells it from
+    a follow-up. Creating one costs **no LLM call**; the call happens if the player goes and
+    knocks. Candidates are ordered strangers-first and least-nudged-first, skipping anyone the
+    player is *already* being pointed at and anyone standing in a room the player has never
+    visited (word doesn't reach you from a corner you've never walked).
+  - **A note is not work.** `open_threads()` (the load, and what `restraint()` grades) counts
+    only real quests; `open_notes()` counts `CHECK_BACK` breadcrumbs, and at most
+    `MAX_OPEN_NOTES` (1) may be outstanding. Counting notes as load fed back on itself: the
+    world dropped a note, the note read as load, the load told everyone to hold off asking, so
+    the only things open were notes — and clearing one freed the slot for the next. For the
+    same reason `main.on_quests_completed` does **not** bump the tick for a `CHECK_BACK`.
+  - `restraint()` grades load + arc-parity into `hold`/`easy`/`free`, which `_commission_block`
+    leans on. **Calibrate in both directions** — blanket restraint just reinstates the
+    stalled-arc bug.
+  - **Never tell a character what else the player is carrying.** `prompt_block()` used to list
+    the player's open quests by title so the NPC could weigh their load; they weighed it out
+    loud ("though you've already got Wren's lamps to mind"), which is both an immersion break
+    and knowledge that isn't theirs. It now speaks only about the character's own position, and
+    says outright not to mention other people's errands. Restraint still applies — the engine
+    keeps the arithmetic to itself and the character feels it as their own reticence.
 - `witness.py` — `record_experience(...)` logs an event **and** writes a first-person memory to
   everyone who was present, so a character can tell "I was there" from "I heard about it".
   Salience tiers `AMBIENT/NOTE/BEAT/MAJOR` gate whether anything is remembered at all;

@@ -339,7 +339,7 @@ def _commission_block(world, npc_id, char) -> str:
             "The player has sought you out — word got round that something was on your "
             "mind. Nothing of yours has just been finished; this is simply them turning "
             "up. Say what has actually been bothering you, in your own way. Ask for help "
-            "with it only if you need their hands for it and their plate allows."
+            "with it only if you genuinely need their hands for it."
         )
 
     parent = world.quest_by_id(cb.parent)
@@ -350,13 +350,15 @@ def _commission_block(world, npc_id, char) -> str:
              if world.in_party(npc_id) else
              f"The player finished {done} and has come back to you.")
     # How hard to lean on restraint depends on the player's load and on whether this
-    # arc is running away from everyone else's (engine/pacing.py).
+    # arc is running away from everyone else's (engine/pacing.py). The character is
+    # never told *why* in those terms — they'd repeat it back as a list of other
+    # people's errands. It reaches them as their own sense of what to ask for.
     lean = {
-        "hold": "Right now (b) is almost certainly the honest answer — they have "
-                "plenty on, or you have already had more than your share of their time.",
+        "hold": "Right now (b) is almost certainly the honest answer — you have "
+                "already had more than your share of their time.",
         "easy": "Weigh (a) against (b) honestly; don't ask unless it matters.",
-        "free": "They are not carrying much and your own thread has not been hogging "
-                "them, so (a) is perfectly reasonable if there is a real next step.",
+        "free": "Your own thread has not been hogging them, so (a) is perfectly "
+                "reasonable if there is a real next step.",
     }[pacing.restraint(world, npc_id)]
     return (
         "\n# A thread to continue\n"
