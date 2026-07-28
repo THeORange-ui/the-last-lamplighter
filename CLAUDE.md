@@ -16,6 +16,7 @@ in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk 
 ```bash
 .venv/bin/python main.py            # run; continues from most-recent save slot
 .venv/bin/python main.py --fresh    # wipe ALL saves + runtime memory, start clean
+.venv/bin/python main.py --log-llm  # also write every prompt + reply to logs/
 ```
 
 - Deps live in the project `.venv/`; always invoke Python as `.venv/bin/python` (Python 3.13).
@@ -27,7 +28,16 @@ in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk 
   testable without a window.
 - `settings.json` (gitignored) holds `{base_url, api_key, model}` for any OpenAI-compatible
   endpoint. **The local copy holds a live `sk-` key — never commit, print, or echo it.** Before any
-  commit, confirm `settings.json`, `save/`, `runtime_memory/`, and `.venv/` are unstaged.
+  commit, confirm `settings.json`, `save/`, `runtime_memory/`, `logs/` and `.venv/` are unstaged.
+- **`--log-llm` is the main debugging tool for behaviour** (`llm/log.py`). The prompts *are*
+  the game, so being able to read exactly what a character was told and what came back beats
+  guessing. It writes `logs/<timestamp>/`: one markdown file per group with the full system
+  prompt, user prompt, raw reply, parsed JSON, latency and token counts, plus an
+  `index.jsonl` for tooling. Every `complete_json` call passes a `log_group=`; dialogue
+  groups get a per-conversation number (`begin_conversation()` from `ui/dialogue.py`), so one
+  exchange is one file. Off by default — a session is hundreds of KB. `logs/` is gitignored
+  and anything matching an `sk-` key is redacted on the way in, since proxy errors can quote
+  the request back at you.
 
 ## Wrap-up workflow (when finishing a piece of work)
 

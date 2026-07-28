@@ -1,7 +1,8 @@
 """The Last Lamplighter — entry point and overworld loop.
 
-Run:  .venv/bin/python main.py           (persists NPC memory across runs)
-      .venv/bin/python main.py --fresh   (wipes runtime memory first)
+Run:  .venv/bin/python main.py             (persists NPC memory across runs)
+      .venv/bin/python main.py --fresh     (wipes runtime memory first)
+      .venv/bin/python main.py --log-llm   (writes every prompt + reply to logs/)
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from engine.state import GroundItem
 from engine.trade import is_vendor
 from engine.cartography import mark_visited
 from engine.pacing import bump_tick, heartbeat
+from llm import log as llm_log
 from llm.client import settings_problem
 from engine.witness import (AMBIENT, BEAT, MAJOR, NOTE, record_experience,
                             witnesses)
@@ -1089,6 +1091,9 @@ class Game:
 
 def main():
     fresh = "--fresh" in sys.argv
+    if "--log-llm" in sys.argv:
+        where = llm_log.enable()
+        print(f"Logging every LLM call to {where}")
     Game(fresh=fresh).run()
 
 

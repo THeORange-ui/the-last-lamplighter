@@ -80,7 +80,8 @@ def write_night(world, facts: dict) -> str:
         + ("\n".join(f"- {t}" for t in facts["events"]) or "- nothing worth the telling")
     )
     try:
-        out = complete_json(system, user, temperature=0.8, max_tokens=180)
+        out = complete_json(system, user, temperature=0.8, max_tokens=180,
+                            log_group=f"night-day{facts['day']}")
     except LLMError:
         return _fallback(facts)
     return str(out.get("line", "")).strip() or _fallback(facts)

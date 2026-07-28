@@ -14,6 +14,7 @@ import pygame
 from engine.items import display_name
 from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
+from llm import log as llm_log
 from npc.agent import APPROACH, npc_respond
 from npc.interject import interject
 from npc.memory import NPCMemory
@@ -61,6 +62,10 @@ class DialogueBox:
         self.npc_id = npc_id
         self.memory = memory
         self.name = character_name(npc_id)
+        # A new box is a new conversation: --log-llm starts a fresh transcript file, so
+        # the turns of one exchange read top to bottom instead of piling into one file
+        # per character for the whole session.
+        llm_log.begin_conversation(npc_id)
         try:
             self._is_vendor = load_character(npc_id).get("kind") == "vendor"
         except KeyError:

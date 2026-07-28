@@ -83,7 +83,8 @@ def enemy_turn(combat: Combat, enemy: Combatant) -> str:
     )
     user = _state_block(combat, enemy) + "\n\nReact and act."
     try:
-        out = complete_json(system, user, temperature=0.8, max_tokens=160)
+        out = complete_json(system, user, temperature=0.8, max_tokens=160,
+                            log_group=f"combat-enemy:{enemy.name}")
     except LLMError:
         return enemy_attack(combat, enemy)
 
@@ -125,7 +126,8 @@ def mercy_attempt(combat: Combat, enemy: Combatant, approach: str) -> str:
     )
     user = _state_block(combat, enemy) + "\n\nHow does this land?"
     try:
-        out = complete_json(system, user, temperature=0.7, max_tokens=180)
+        out = complete_json(system, user, temperature=0.7, max_tokens=180,
+                            log_group=f"combat-mercy:{enemy.name}")
     except LLMError:
         enemy.resolve = max(0, enemy.resolve - 8)
         combat.add_log(f"You reach out to {enemy.name}.")
@@ -203,7 +205,8 @@ def ally_turn(combat: Combat, ally: Combatant, world=None) -> str:
     )
     user = _ally_state_block(combat, ally) + "\n\nWhat do you do?"
     try:
-        out = complete_json(system, user, temperature=0.8, max_tokens=180)
+        out = complete_json(system, user, temperature=0.8, max_tokens=180,
+                            log_group=f"combat-ally:{ally.name}")
     except LLMError:
         return ally_step(combat, ally)
 
@@ -246,7 +249,8 @@ def speak_to_ally(combat: Combat, ally: Combatant, said: str, world=None) -> str
     )
     user = _ally_state_block(combat, ally) + "\n\nRespond."
     try:
-        out = complete_json(system, user, temperature=0.8, max_tokens=120)
+        out = complete_json(system, user, temperature=0.8, max_tokens=120,
+                            log_group=f"combat-ally:{ally.name}")
     except LLMError:
         combat.add_log(f"{ally.name} nods to you.")
         return "..."

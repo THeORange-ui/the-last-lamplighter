@@ -76,7 +76,8 @@ def _write_one(world, npc_id, outcome: str) -> str:
         + f"\nWhat they remember of the player:\n{mem.as_prompt(6)}"
     )
     try:
-        out = complete_json(system, user, temperature=0.7, max_tokens=160)
+        out = complete_json(system, user, temperature=0.7, max_tokens=160,
+                            log_group=f"epilogue:{npc_id}")
     except LLMError:
         return _fallback(world, npc_id)
     return str(out.get("line", "")).strip() or _fallback(world, npc_id)

@@ -385,7 +385,8 @@ def perceive(state: TurnState) -> TurnState:
 
 def reason(state: TurnState) -> TurnState:
     try:
-        out = complete_json(state["system"], state["user"])
+        out = complete_json(state["system"], state["user"],
+                            log_group=f"dialogue:{state['npc_id']}")
     except LLMError as e:
         return {
             "dialogue": "…",
@@ -516,7 +517,8 @@ def summarize_memory(npc_id, prior_summary, old_entries):
     )
     user = f"Earlier summary:\n{prior}\n\nNewer events to fold in:\n{log}"
     try:
-        out = complete_json(system, user, temperature=0.4, max_tokens=300)
+        out = complete_json(system, user, temperature=0.4, max_tokens=300,
+                            log_group=f"memory:{npc_id}")
     except LLMError:
         return None
     return str(out.get("summary", "")).strip() or None

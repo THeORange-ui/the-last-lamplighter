@@ -104,7 +104,8 @@ def interject(world, npc_id: str, beat: dict, memory) -> str:
     )
     user = f"What just happened: {beat['text']}\n\nWhat do you say, if anything?"
     try:
-        out = complete_json(system, user, temperature=0.9, max_tokens=90)
+        out = complete_json(system, user, temperature=0.9, max_tokens=90,
+                            log_group=f"interject:{npc_id}")
     except LLMError:
         return ""
     line = str(out.get("line", "")).strip()[:_MAX_LINE]

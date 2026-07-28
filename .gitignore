@@ -6,6 +6,8 @@ __pycache__/
 save/
 runtime_memory/
 test-saves/
+# --log-llm transcripts: full prompts and replies, local only
+logs/
 
 # founding design doc — kept locally, not shipped
 ORIGINAL_GAME_SETTING.md
