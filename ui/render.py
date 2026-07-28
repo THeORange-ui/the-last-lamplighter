@@ -7,6 +7,12 @@ from npc.roster import character_name
 from ui import sprites
 from ui import theme as T
 
+# Shown wherever the quest list is empty (HUD and journal). Nothing is broken when
+# the player has nothing on — but an empty list looks like it, so the game should say
+# what to do next, and resting is both always available and the thing that moves the
+# world on (see ui/night.py).
+IDLE_HINT = "Nothing on the agenda — perhaps time to take a rest."
+
 
 def wrap_text(text, fnt, max_w):
     """Word-wrap `text` to a pixel width, returning a list of lines."""
@@ -215,6 +221,12 @@ def draw_hud(screen, world, rooms, hint=""):
         q = quests[0]
         draw_text(screen, f"• {q.title}: {q.progress}/{q.objective.count}",
                   (T.SCREEN_W - 14, T.PLAY_H + 8), T.font(15), T.TEXT_WARN, right=True)
+    else:
+        # An empty objective slot reads as "the game has stopped giving me things".
+        # Say what the player can actually do about it — the night is the one move
+        # that is always available and always makes the world take a turn.
+        draw_text(screen, IDLE_HINT, (T.SCREEN_W - 14, T.PLAY_H + 8),
+                  T.font(15), T.TEXT_DIM, right=True)
 
     if hint:
         draw_text(screen, hint, (T.SCREEN_W - 14, T.PLAY_H + 50),

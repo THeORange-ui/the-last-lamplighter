@@ -7,7 +7,7 @@ import pygame
 
 from engine.items import display_name
 from ui import theme as T
-from ui.render import draw_text
+from ui.render import IDLE_HINT, draw_text
 
 
 def draw_journal(screen, world):
@@ -30,6 +30,11 @@ def draw_journal(screen, world):
         draw_text(screen, "Nothing yet. Talk to the townsfolk.", (margin + 8, y),
                   T.font(16), T.TEXT_DIM)
         y += 24
+    elif not active:
+        # Everything you were carrying is done. Say what comes next rather than
+        # leaving a list of ticked-off titles and no direction.
+        draw_text(screen, IDLE_HINT, (margin + 8, y), T.font(16), T.TEXT_WARN)
+        y += 26
     for q in active:
         chain = "  (continues your path)" if getattr(q, "parent", None) else ""
         draw_text(screen, f"• {q.title}  ({q.progress}/{q.objective.count}){chain}",
