@@ -36,7 +36,11 @@ from engine.quests import CHECK_BACK, Objective, Quest, Reward, add_quest
 THREAD_CAP = 4          # real, workable threads before the world stays quiet
 MIN_GAP = 6             # progress *points* between heartbeats (see WEIGHTS)
 QUIET_TICKS = 4         # points since you last spoke before someone gets restless
-MAX_OPEN_NOTES = 1      # outstanding "go and see someone" notes allowed at once
+MAX_OPEN_NOTES = 2      # outstanding "go and see someone" notes allowed at once.
+                        # Two, because up to MAX_ACTORS people act in a night and
+                        # each may leave one — capping at one throttled the night
+                        # itself, not just the heartbeat. The heartbeat is held
+                        # back by MIN_GAP anyway, so this does not reopen the flood.
 
 # Not all progress is equal. Walking into a new room is a step; finishing something
 # somebody asked of you is an event. Counting them the same made exploration alone

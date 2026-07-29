@@ -17,6 +17,8 @@ concrete to be about should be silent; quiet nights are what make the loud ones 
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from engine.items import display_name
 from engine.witness import BEAT, record_experience
 from engine.initiative import legal_rooms, note_acted
@@ -116,18 +118,27 @@ def _user(world, rooms, npc_id: str, goal) -> str:
 SUBSTANTIVE = {"go", "take", "leave"}
 
 
-def decide_night(world, rooms, known, npc_id: str) -> tuple[list[str], bool]:
+class NightResult(NamedTuple):
+    lines: list          # third-person, the engine's own words
+    substantive: bool    # moved something the player could walk into
+    asked: bool          # left an actual quest of their own
+
+
+_NOTHING = NightResult((), False, False)    # tuple: a shared default must not be mutable
+
+
+def decide_night(world, rooms, known, npc_id: str) -> NightResult:
     """Ask one character what they do tonight; validate and apply it.
 
-    Returns (lines, substantive). The lines are third-person descriptions of what
-    actually changed — the engine's own words, never the model's, so a report can't
-    describe something that didn't happen. `substantive` says whether the night moved
-    anything the player could walk into, which decides whether it needs a thread.
+    The lines are third-person descriptions of what actually changed — the engine's own
+    words, never the model's, so a report can't describe something that didn't happen.
+    `substantive` and `asked` are per-character, not per-night: whether *this* person
+    needs a thread left behind them is nothing to do with what anybody else did.
     """
     try:
         char = load_character(npc_id)
     except KeyError:
-        return [], False
+        return _NOTHING
     npc = world.npcs[npc_id]
     goal = open_goal(npc)
     was_room = npc.room
@@ -137,17 +148,19 @@ def decide_night(world, rooms, known, npc_id: str) -> tuple[list[str], bool]:
                             temperature=0.85, max_tokens=320,
                             log_group=f"night-act:{npc_id}")
     except LLMError:
-        return [], False   # a night the endpoint slept through is simply a quiet one
+        return _NOTHING    # a night the endpoint slept through is simply a quiet one
 
     actions = out.get("actions")
     if not isinstance(actions, list) or not actions:
-        return [], False
+        return _NOTHING
     chosen = actions[:MAX_ACTIONS]
+    quests_before = len(world.quests)
     result = apply_actions(world, npc_id, chosen, known, rooms, as_kind="offscreen")
     if not result.effects:
-        return [], False   # everything they proposed was dropped; the night stays quiet
-    substantive = any(str(a.get("type", "")) in SUBSTANTIVE
-                      for a in chosen if isinstance(a, dict))
+        return _NOTHING    # everything they proposed was dropped; the night stays quiet
+    types = {str(a.get("type", "")) for a in chosen if isinstance(a, dict)}
+    substantive = bool(types & SUBSTANTIVE)
+    asked = len(world.quests) > quests_before
 
     note_acted(world, npc_id)
     # What they did is their own experience — first-hand, and *only* theirs. Handing the
@@ -166,4 +179,4 @@ def decide_night(world, rooms, known, npc_id: str) -> tuple[list[str], bool]:
             NPCMemory.remember_for(other, result.observed[i])
     # `effects` is the player-facing phrasing and already names who did it — prefixing
     # the name again produced "Old Perrin: Old Perrin passes word to Wren."
-    return list(result.effects), substantive
+    return NightResult(list(result.effects), substantive, asked)

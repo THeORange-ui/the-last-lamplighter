@@ -159,51 +159,54 @@ def run_night(world, rooms, known) -> list[str]:
     """
     from npc.nightly import decide_night
     reports: list[str] = []
-    acted: list[str] = []
-    quests_before = len(world.quests)
+    owed: list[str] = []                    # acted for real, but left nothing to take up
+    anything = False
     for npc_id in candidates(world, rooms):
         note_asked(world, npc_id)           # asked is spent, whatever they answer
         try:
-            lines, substantive = decide_night(world, rooms, known, npc_id)
+            out = decide_night(world, rooms, known, npc_id)
         except Exception:                   # noqa: BLE001 — never let a night crash
             continue
-        if substantive:
-            acted.append(npc_id)
-        reports.extend(lines)
+        anything = anything or bool(out.lines)
+        if out.substantive and not out.asked:
+            owed.append(npc_id)
+        reports.extend(out.lines)
 
-    note = leave_a_thread(world, rooms, acted, len(world.quests) > quests_before)
-    if note is not None:
+    for note in leave_threads(world, rooms, owed, anything):
         reports.append(f"New note: {note.title}.")
     world.flags["last_night_reports"] = reports
     return reports
 
 
-def leave_a_thread(world, rooms, acted: list[str], made_quest: bool):
-    """At most one new note a night, and never more than one.
+def leave_threads(world, rooms, owed: list[str], anything_happened: bool) -> list:
+    """Give each character who did something real, and left nothing to take up, a note.
 
     A move on its own reads as nothing happening — two nights running gave "Sella went
-    to the tavern" and "Wren went to the store" with no quest between them. So a
-    *substantive* act that left nothing to take up gets a note pointing at whoever made
-    it. But this is not a guarantee that something arrives every night: passing word
-    doesn't earn one (nobody needs a quest because two people spoke), and a quiet night
-    falls through to the ordinary heartbeat, which keeps its own gap unless the player
-    is holding nothing at all. Empty nights are allowed, and should be.
+    to the tavern" and "Wren went to the store", with no thread from either. So a
+    *substantive* act that produced no ask of its own earns a note pointing at whoever
+    made it, **per character**. Someone else asking for something is not a reason to
+    leave this person's night dangling.
 
-    One note, never two, so this can't become a second content faucet running alongside
-    `pacing.heartbeat` — the failure mode that module has already had twice.
+    What bounds this is `MAX_ACTORS`, not a separate rule: at most two people act, so at
+    most two notes, and only for acts that actually moved something. Passing word earns
+    nothing (nobody needs a quest because two people spoke), and a night where nothing
+    happened at all falls through to the ordinary heartbeat, which keeps its own gap
+    unless the player is holding nothing. **Nights with nothing in them are allowed.**
     """
     from engine import pacing
-    if made_quest:
-        return None                         # the ask itself is tonight's thread
-    if len(pacing.open_notes(world)) >= pacing.MAX_OPEN_NOTES:
-        return None                         # they already owe someone a visit
-    for npc_id in acted:
+    made = []
+    for npc_id in owed:
         if pacing.has_thread(world, npc_id):
-            continue
+            continue                        # already being pointed at them
+        if len(pacing.open_notes(world)) >= pacing.MAX_OPEN_NOTES:
+            break                           # the player's notes are stacking up
         quest = pacing.make_heartbeat_quest(world, npc_id)
         if add_quest(world, quest) is None:
             continue
         world.flags["last_heartbeat"] = pacing.tick(world)
         world.events.record("quest_start", f"New note: {quest.title}.")
-        return quest
-    return pacing.heartbeat(world, rooms)
+        made.append(quest)
+    if made or anything_happened:
+        return made
+    quiet = pacing.heartbeat(world, rooms)  # nobody stirred; the ordinary nudge applies
+    return [quiet] if quiet is not None else []

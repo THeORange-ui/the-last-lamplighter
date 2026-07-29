@@ -481,14 +481,17 @@ Two constraints hold across the whole part:
     "find out what Corvin's pass story is actually worth" has no counter that closes it,
     and forcing it into `talk_to` turned a real question into a box-tick. Offscreen gets
     its own doc block for the same verb via `CATALOG_DOCS`.
-  - **Every night leaves at most one thread — not at least one** (`initiative.leave_a_thread`).
+  - **What a night leaves behind is decided per character** (`initiative.leave_threads`).
     A bare `go` reads as nothing happening, so a **substantive** act (`nightly.SUBSTANTIVE`
-    — go/take/leave) that left nothing to take up gets a note pointing at whoever made it.
-    Passing word doesn't earn one: nobody needs a quest because two people spoke, and
-    forcing one made the world feel like it was feeding the player. A quiet night falls
-    through to `pacing.heartbeat`, which keeps its own gap unless the plate is empty —
-    **so nights with nothing in them are allowed, and should be.** The single-note rule is
-    what stops this becoming a second faucet running alongside the heartbeat.
+    — go/take/leave) that produced no ask of its own earns a note pointing at whoever made
+    it. `NightResult` reports `substantive`/`asked` per actor precisely so that one person
+    asking for something never suppresses another's dangling night — an earlier
+    one-note-per-night rule throttled the world's turn itself, not just the heartbeat.
+    What bounds it is `MAX_ACTORS` (2), not a separate rule, with `MAX_OPEN_NOTES` (2)
+    stopping notes stacking across nights. Passing word earns nothing: nobody needs a quest
+    because two people spoke. And a night where nothing happened falls through to
+    `pacing.heartbeat`, which keeps its own gap unless the plate is empty — **so nights
+    with nothing in them are allowed, and should be.**
     `main.progress("rest", nudge=False)` gives the night first refusal, because a note
     naming someone who actually did something beats a generic nudge.
   - **`pacing` and `initiative` share one definition of findable** (`findable_rooms`:
