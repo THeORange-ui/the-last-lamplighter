@@ -61,7 +61,12 @@ def _system(char: dict, goal: dict | None) -> str:
         "return an empty list. That is the normal answer.\n"
         "And if all you would do is send someone a message, that is usually a sign the "
         "honest answer was to do nothing. Sending word costs you nothing and changes "
-        "nothing; save it for when there is something someone truly needs to know.\n\n"
+        "nothing; save it for when there is something someone truly needs to know.\n"
+        "But **if you do act, leave something behind that the outsider could pick up.** "
+        "Walking somewhere and saying nothing about why is the same as not acting at "
+        "all, from anyone else's side of it. If your night gives you a reason to want "
+        "their hands for something, ask for it — that is usually the point of having "
+        "moved at all.\n\n"
         + action_catalog("offscreen")
         + '\nReply with ONE JSON object: {"actions": [ ... ]}'
     )

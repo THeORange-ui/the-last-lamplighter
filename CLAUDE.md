@@ -470,6 +470,26 @@ Two constraints hold across the whole part:
     the third-person one — handing `first_person` to everyone present is the
     reversed-perspective bug in a new place, and it had Wren remembering passing word to
     herself.
+  - **Every night leaves exactly one thread, and never two** (`initiative.leave_a_thread`).
+    A bare `go` reads as nothing happening: in play, two nights running gave "Sella went to
+    the tavern" and "Wren went to the store", and the player woke on day two with an empty
+    agenda. So if a night's acts produced a real ask, that is the thread; if somebody acted
+    but left nothing to take up, the engine points the player at *them*; if the night was
+    quiet, it falls through to the ordinary `pacing.heartbeat`, which is substance enough on
+    its own and costs no call. The single-note rule is what stops this becoming a second
+    faucet running alongside the heartbeat. `main.progress("rest", nudge=False)` gives the
+    night first refusal, because a note naming someone who actually did something beats a
+    generic nudge.
+  - **`pacing` and `initiative` share one definition of findable** (`findable_rooms`:
+    visited, plus one door beyond). They used to disagree — initiative could legally move
+    somebody one door past the walked map, and the heartbeat, which demanded a strictly
+    *visited* room, then couldn't see them at all. A night could silently delete a character
+    from the pacing pool. If you ever add a third thing that reasons about where the player
+    can get to, point it at the same function.
+  - **An empty plate is a floor, not a cadence.** `heartbeat()` ignores `MIN_GAP` when the
+    player holds no threads *and* no notes — being handed nothing is not pacing, it is being
+    stranded, and in play the world went dry with the next heartbeat four points away and no
+    way to earn them but resting twice for nothing.
 
 Out of scope, deliberately: the darkening-world dial (engine-owned Gloam pressure that rooms
 read declaratively). Its own part later, so this playtest reads cleanly.

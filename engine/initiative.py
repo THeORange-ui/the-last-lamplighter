@@ -158,12 +158,53 @@ def run_night(world, rooms, known) -> list[str]:
     """
     from npc.nightly import decide_night
     reports: list[str] = []
+    acted: list[str] = []
+    quests_before = len(world.quests)
     for npc_id in candidates(world, rooms):
         note_asked(world, npc_id)           # asked is spent, whatever they answer
         try:
             lines = decide_night(world, rooms, known, npc_id)
         except Exception:                   # noqa: BLE001 — never let a night crash
             continue
+        if lines:
+            acted.append(npc_id)
         reports.extend(lines)
+
+    note = leave_a_thread(world, rooms, acted, len(world.quests) > quests_before)
+    if note is not None:
+        reports.append(f"New note: {note.title}.")
     world.flags["last_night_reports"] = reports
     return reports
+
+
+def leave_a_thread(world, rooms, acted: list[str], made_quest: bool):
+    """Every night leaves the player at most one new note — and at least something.
+
+    A move on its own reads as nothing happening. In play two nights running produced
+    "Sella went to the tavern" and "Wren went to the store", with no quest between them,
+    and the player was left holding an empty agenda on day two. So:
+
+      * if somebody's night produced a real ask, that is the thread — nothing more;
+      * if somebody acted but left nothing to take up, point the player at *them*;
+      * if the night was quiet, fall back to the ordinary neglect heartbeat, which is
+        substantive enough on its own and costs no call.
+
+    One note, never two, so this can't become a second content faucet running alongside
+    `pacing.heartbeat` — the failure mode that module has already had twice.
+    """
+    from engine import pacing
+    if made_quest:
+        return None
+    if len(pacing.open_notes(world)) >= pacing.MAX_OPEN_NOTES:
+        return None                         # they already owe someone a visit
+    for npc_id in acted:
+        if pacing.has_thread(world, npc_id):
+            continue
+        quest = pacing.make_heartbeat_quest(world, npc_id)
+        if world.has_quest(quest.id):
+            continue
+        world.quests.append(quest)
+        world.flags["last_heartbeat"] = pacing.tick(world)
+        world.events.record("quest_start", f"New note: {quest.title}.")
+        return quest
+    return pacing.heartbeat(world, rooms)

@@ -104,7 +104,7 @@ def arc_standing(state, npc_id: str) -> tuple[int, float]:
 
 
 # --- the heartbeat ----------------------------------------------------------
-def _has_own_thread(state, npc_id: str) -> bool:
+def has_thread(state, npc_id: str) -> bool:
     """Is the player already being pointed at this person by anything?
 
     Not just quests they gave — one that *targets* them counts too, or the world
@@ -125,17 +125,23 @@ def _nudges(state, npc_id: str) -> int:
     return int(state.npcs[npc_id].flags.get("nudges", 0))
 
 
-def _candidates(state) -> list[str]:
+def _candidates(state, rooms) -> list[str]:
     """Who could use a nudge, best first: strangers before the neglected.
 
     Ordered by how often the world has already nudged them, so it works round the
     cast instead of pestering whoever happens to be first in the roster.
     """
     now = tick(state)
-    seen_rooms = set(state.flags.get("visited") or [])
+    # One definition of "findable", shared with engine/initiative.py. They used to
+    # disagree — initiative would move somebody one door beyond the map you'd walked
+    # (legal, and findable) and the heartbeat, which demanded a strictly *visited* room,
+    # would stop being able to see them at all. A night could quietly delete a character
+    # from the pacing pool, which is exactly how the world ran dry after two rests.
+    from engine.initiative import findable_rooms
+    seen_rooms = findable_rooms(state, rooms)
     unmet, known = [], []
     for npc_id, npc in state.npcs.items():
-        if npc_id == "gloam" or _has_own_thread(state, npc_id):
+        if npc_id == "gloam" or has_thread(state, npc_id):
             continue
         if npc.room not in seen_rooms:
             continue        # word doesn't reach you from a corner you've never walked
@@ -177,7 +183,7 @@ def make_heartbeat_quest(state, npc_id: str) -> Quest:
     )
 
 
-def heartbeat(state) -> Quest | None:
+def heartbeat(state, rooms) -> Quest | None:
     """Maybe start something for a character the player has been neglecting.
 
     Returns the quest it created, or None — which is the common case, because a
@@ -188,11 +194,16 @@ def heartbeat(state) -> Quest | None:
     if len(open_notes(state)) >= MAX_OPEN_NOTES:
         return None          # already owed a visit; don't stack another on top
     now = tick(state)
-    # Default 0, not -MIN_GAP: the very first step into the world should not come
-    # with a note attached before the player has met a single person.
-    if now - int(state.flags.get("last_heartbeat", 0)) < MIN_GAP:
+    # An empty plate is a floor, not a cadence. Normally the gap is respected, but a
+    # player holding *nothing at all* is not being paced, they are stranded: in play the
+    # world went dry on day two with the next heartbeat four points away, reachable only
+    # by resting twice for no reason. Nothing open means the gap doesn't apply.
+    stranded = not open_threads(state) and not open_notes(state)
+    if not stranded and now - int(state.flags.get("last_heartbeat", 0)) < MIN_GAP:
+        # Default 0, not -MIN_GAP: the very first step into the world should not come
+        # with a note attached before the player has met a single person.
         return None
-    for npc_id in _candidates(state):
+    for npc_id in _candidates(state, rooms):
         quest = make_heartbeat_quest(state, npc_id)
         if state.has_quest(quest.id):
             continue

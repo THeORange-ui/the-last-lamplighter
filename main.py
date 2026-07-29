@@ -259,12 +259,19 @@ class Game:
         if completed:
             self._auto_commission()
 
-    def progress(self, kind: str):
+    def progress(self, kind: str, nudge: bool = True):
         """One unit of progress happened — a quest finished, a night passed, a new room
         seen. The world may answer by nudging somebody the player has been neglecting
-        (engine/pacing.py); it stays quiet if their plate is already full."""
+        (engine/pacing.py); it stays quiet if their plate is already full.
+
+        `nudge=False` for a rest: the night gets first refusal on the one note a night
+        may leave, because a note pointing at somebody who actually *did* something
+        beats a generic neglect nudge, and only one of the two may land.
+        """
         bump_tick(self.world, kind)
-        q = heartbeat(self.world)
+        if not nudge:
+            return
+        q = heartbeat(self.world, self.rooms)
         if q is not None:
             self.set_toast(f"New note: {q.title}")
 
@@ -770,7 +777,7 @@ class Game:
             self.storage_panel = StoragePanel(self.world)
             self.storage_open = True
         if any(k == "rest" for k, _ in events):
-            self.progress("rest")
+            self.progress("rest", nudge=False)   # the night hands out the note
             self.begin_night(pre_seq)
         if result.quests_dirty:
             self.on_quests_completed(refresh_and_complete(self.world, self.known))
