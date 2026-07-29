@@ -11,8 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from engine.items import display_name
-from engine.quests import (QuestValidationError, build_quest, build_simple_quest,
-                           find_check_back, open_request_from)
+from engine.quests import (OFFSCREEN_OBJECTIVES, QuestValidationError, add_quest,
+                           build_quest, build_simple_quest, find_check_back,
+                           open_request_from)
 from engine.state import GroundItem
 from engine.world import GRID_H, GRID_W, RIDGE_ROOMS, Room
 from npc.roster import character_name
@@ -128,6 +129,20 @@ ACTIONS: dict[str, str] = {
         '- {"type": "end_dialogue"}\n'
         "    End the conversation naturally."
     ),
+    "request_help_offscreen": (
+        '- {"type": "request_help", "quest": {\n'
+        '       "title": "<short>", "description": "<one sentence>",\n'
+        '       "objective": {"type": "fetch|deliver|talk_to|judged",\n'
+        '                     "target": "<item id / npc id / a plain-English criterion>",\n'
+        '                     "npc": "<id, deliver only>"},\n'
+        '       "reward": {"type": "item|affinity|info", "value": "<item you CARRY / int / fact>"}}}\n'
+        "    Send word asking the outsider for one thing. Use a concrete type when there is\n"
+        "    a clear test — fetch me that, take this to her, go and speak to him. Use\n"
+        "    \"judged\" when what you want is something only YOU can call settled: find out\n"
+        "    what his story is really worth, set my mind at rest about the hollow. You close\n"
+        "    a judged one yourself, later, with complete_quest.\n"
+        "    One outstanding ask at a time, and goods come out of your own pocket."
+    ),
     # --- offscreen only: the world's turn, while the player sleeps -------------
     # These never appear in a conversation. They are the whole vocabulary a character
     # has for acting on their own (engine/initiative.py, npc/nightly.py).
@@ -206,10 +221,19 @@ def allowed_actions(kind: str) -> set[str]:
     return set(ACTION_SETS.get(kind, ACTION_SETS["main"]))
 
 
+# Some actions want different wording in a different setting, without becoming a
+# different action. A night's `request_help` may be `judged` and a minor's may not, so
+# offscreen gets its own doc block for the same verb.
+CATALOG_DOCS: dict[str, dict[str, str]] = {
+    "offscreen": {"request_help": "request_help_offscreen"},
+}
+
+
 def action_catalog(kind: str = "main") -> str:
     """Render the prompt catalog with only the actions this kind is allowed to use."""
     allowed = ACTION_SETS.get(kind, ACTION_SETS["main"])
-    blocks = [ACTIONS[a] for a in allowed if a in ACTIONS]
+    docs = CATALOG_DOCS.get(kind, {})
+    blocks = [ACTIONS[docs.get(a, a)] for a in allowed if docs.get(a, a) in ACTIONS]
     return _CATALOG_HEADER + "\n" + "\n".join(blocks) + "\n"
 
 
@@ -314,9 +338,9 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
             except QuestValidationError as e:
                 result.debug.append(f"dropped quest: {e}")
                 continue
-            if state.has_quest(quest.id):
+            if add_quest(state, quest) is None:
+                result.debug.append(f"dropped quest {quest.id!r}: already satisfied")
                 continue
-            state.quests.append(quest)
             state.events.record("quest_start", f"{name} gave you the quest “{quest.title}”.")
             _note(result, f"{name} gives you a quest: “{quest.title}”.",
                   f"You asked them to: “{quest.title}”.",
@@ -332,14 +356,16 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
                 result.debug.append(f"{npc_id} already has a favour outstanding")
                 continue
             try:
-                quest = build_simple_quest(raw["quest"], giver=npc_id, known=known,
-                                           inventory=state.npcs[npc_id].inventory)
+                quest = build_simple_quest(
+                    raw["quest"], giver=npc_id, known=known,
+                    inventory=state.npcs[npc_id].inventory,
+                    allowed=OFFSCREEN_OBJECTIVES if kind == "offscreen" else None)
             except QuestValidationError as e:
                 result.debug.append(f"dropped request: {e}")
                 continue
-            if state.has_quest(quest.id):
+            if add_quest(state, quest) is None:
+                result.debug.append(f"dropped request {quest.id!r}: already satisfied")
                 continue
-            state.quests.append(quest)
             if kind == "offscreen":
                 # Nobody handed this over in person — word of it arrived overnight.
                 state.events.record("quest_start",

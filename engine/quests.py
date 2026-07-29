@@ -64,6 +64,10 @@ class Quest:
     #   {"kind": "quest", "quest": {<quest dict>}}  — a concrete next node, activated now
     # A "decide_later" node is a leaf: it has no children (they're decided at that point).
     followups: list = field(default_factory=list)
+    # The conversation counter when this was handed over. "Go and speak to Corvin" has
+    # to mean a conversation *after* the asking, so `talk_to` measures against this
+    # rather than against the permanent "have you two ever met" flag. See `add_quest`.
+    opened_seq: int = 0
 
     def summary(self) -> str:
         return f"{self.title} — {self.description}"
@@ -170,20 +174,28 @@ def build_quest(data: dict, giver: str, known: "KnownEntities",
 # progression-shaped, and a throwaway NPC should never be steering the main line.
 MINOR_OBJECTIVES = {"fetch", "deliver", "talk_to"}
 
+# What an *offscreen* ask may be. Same rails, plus `judged`: a night's ask is often
+# something only the asker can call settled — "find out what Corvin's pass story is
+# actually worth" has no counter that closes it, and forcing it into `talk_to` made a
+# real question into a box-tick. The giver closes it with `complete_quest`, whose ids
+# are in their briefing.
+OFFSCREEN_OBJECTIVES = MINOR_OBJECTIVES | {"judged"}
+
 
 def build_simple_quest(data: dict, giver: str, known: "KnownEntities",
-                       inventory=()) -> Quest:
-    """A minor character's small ask, railed hard.
+                       inventory=(), allowed=None) -> Quest:
+    """A small ask, railed hard.
 
-    Same grounding as build_quest, then: one of three shapes, count forced to 1, no
-    follow-ups (minor characters don't run arcs), and a reward they can actually pay —
-    an item reward has to be something in their own pocket, or it falls back to warmth.
+    Same grounding as build_quest, then: one of a few shapes, count forced to 1, no
+    follow-ups (a favour is not an arc), and a reward they can actually pay — an item
+    reward has to be something in their own pocket, or it falls back to warmth.
     """
+    allowed = allowed or MINOR_OBJECTIVES
     obj = dict(data.get("objective") or {})
     otype = str(obj.get("type", "")).strip()
-    if otype not in MINOR_OBJECTIVES:
+    if otype not in allowed:
         raise QuestValidationError(
-            f"{otype!r} is not something a minor character may ask for")
+            f"{otype!r} is not something this character may ask for here")
     obj["count"] = 1
 
     reward = dict(data.get("reward") or {})
@@ -222,6 +234,25 @@ class KnownEntities:
     interactable_kinds: set[str] = field(default_factory=set)
 
 
+def add_quest(state, quest: Quest) -> Quest | None:
+    """Put a quest on the player's plate, stamped with when it was handed over.
+
+    Refuses one that is *already* satisfied. Sella asking the player to go and price
+    Corvin's tale produced a real quest that completed in the same frame it was created,
+    because the player had met Corvin an hour earlier — so all the player ever saw was a
+    log line, and two nights of substantive asks looked like nothing had happened.
+    """
+    if state.has_quest(quest.id):
+        return None
+    # Stamped from the conversation counter (engine/pacing.note_talked), read straight
+    # off flags so quests.py doesn't have to import pacing, which imports quests.
+    quest.opened_seq = int(state.flags.get("talk_seq", 0))
+    if evaluate_progress(quest, state) >= quest.objective.count:
+        return None          # nothing to do the moment it arrives is not a task
+    state.quests.append(quest)
+    return quest
+
+
 def evaluate_progress(quest: Quest, state) -> int:
     """Compute current progress toward a quest's objective from world state."""
     o = quest.objective
@@ -233,8 +264,13 @@ def evaluate_progress(quest: Quest, state) -> int:
     if o.type in ("fetch", "deliver"):
         return min(state.player.inventory.count(o.target), o.count)
     if o.type == "talk_to":
+        # Being asked to go and speak to someone means speaking to them *now*, not
+        # having met them once before. Measured against when the quest was handed over.
         npc = state.npcs.get(o.target)
-        return o.count if npc and npc.talked_to else 0
+        if npc is None:
+            return 0
+        spoke = int(npc.flags.get("last_talk_seq", 0))
+        return o.count if spoke > quest.opened_seq else 0
     if o.type == "judged":
         # Never satisfied by world state — only the giver's own `complete_quest` moves it.
         return quest.progress
@@ -305,8 +341,7 @@ def _activate_followups(quest: Quest, state, known) -> None:
         kind = fu.get("kind")
         if kind == "decide_later":
             cb = make_check_back_quest(quest.giver, quest.id)
-            if not state.has_quest(cb.id):
-                state.quests.append(cb)
+            if add_quest(state, cb) is not None:
                 state.events.record("quest_start", f"New note: {cb.title}.")
         elif kind == "quest" and known is not None:
             try:

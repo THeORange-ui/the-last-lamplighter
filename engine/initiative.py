@@ -28,6 +28,7 @@ initiative creates is an input to whether initiative fires again.
 """
 from __future__ import annotations
 
+from engine.quests import add_quest
 from engine.world import NPC_SPAWNS, PRIVATE_ROOMS, ridge_open
 
 MAX_ACTORS = 2          # characters who may act in one night. Hard cap, never scaled.
@@ -163,10 +164,10 @@ def run_night(world, rooms, known) -> list[str]:
     for npc_id in candidates(world, rooms):
         note_asked(world, npc_id)           # asked is spent, whatever they answer
         try:
-            lines = decide_night(world, rooms, known, npc_id)
+            lines, substantive = decide_night(world, rooms, known, npc_id)
         except Exception:                   # noqa: BLE001 — never let a night crash
             continue
-        if lines:
+        if substantive:
             acted.append(npc_id)
         reports.extend(lines)
 
@@ -178,32 +179,30 @@ def run_night(world, rooms, known) -> list[str]:
 
 
 def leave_a_thread(world, rooms, acted: list[str], made_quest: bool):
-    """Every night leaves the player at most one new note — and at least something.
+    """At most one new note a night, and never more than one.
 
-    A move on its own reads as nothing happening. In play two nights running produced
-    "Sella went to the tavern" and "Wren went to the store", with no quest between them,
-    and the player was left holding an empty agenda on day two. So:
-
-      * if somebody's night produced a real ask, that is the thread — nothing more;
-      * if somebody acted but left nothing to take up, point the player at *them*;
-      * if the night was quiet, fall back to the ordinary neglect heartbeat, which is
-        substantive enough on its own and costs no call.
+    A move on its own reads as nothing happening — two nights running gave "Sella went
+    to the tavern" and "Wren went to the store" with no quest between them. So a
+    *substantive* act that left nothing to take up gets a note pointing at whoever made
+    it. But this is not a guarantee that something arrives every night: passing word
+    doesn't earn one (nobody needs a quest because two people spoke), and a quiet night
+    falls through to the ordinary heartbeat, which keeps its own gap unless the player
+    is holding nothing at all. Empty nights are allowed, and should be.
 
     One note, never two, so this can't become a second content faucet running alongside
     `pacing.heartbeat` — the failure mode that module has already had twice.
     """
     from engine import pacing
     if made_quest:
-        return None
+        return None                         # the ask itself is tonight's thread
     if len(pacing.open_notes(world)) >= pacing.MAX_OPEN_NOTES:
         return None                         # they already owe someone a visit
     for npc_id in acted:
         if pacing.has_thread(world, npc_id):
             continue
         quest = pacing.make_heartbeat_quest(world, npc_id)
-        if world.has_quest(quest.id):
+        if add_quest(world, quest) is None:
             continue
-        world.quests.append(quest)
         world.flags["last_heartbeat"] = pacing.tick(world)
         world.events.record("quest_start", f"New note: {quest.title}.")
         return quest

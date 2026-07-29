@@ -31,7 +31,7 @@ Hence: progress is **weighted** (a finished quest is worth three rooms), a note 
 """
 from __future__ import annotations
 
-from engine.quests import CHECK_BACK, Objective, Quest, Reward
+from engine.quests import CHECK_BACK, Objective, Quest, Reward, add_quest
 
 THREAD_CAP = 4          # real, workable threads before the world stays quiet
 MIN_GAP = 6             # progress *points* between heartbeats (see WEIGHTS)
@@ -57,10 +57,19 @@ def bump_tick(state, kind: str = "") -> int:
 
 
 def note_talked(state, npc_id: str) -> None:
-    """Remember when the player last spoke to someone, for neglect scoring."""
+    """Remember when the player last spoke to someone.
+
+    Two clocks, for two jobs: `last_talk_tick` is coarse progress, for neglect scoring;
+    `talk_seq` counts conversations, which is what lets a `talk_to` quest tell "they
+    spoke since I asked" from "they had met at some point". It is its own counter rather
+    than the event sequence, because a conversation doesn't always record an event and a
+    quest that needs one would then never close.
+    """
     npc = state.npcs.get(npc_id)
     if npc is not None:
+        state.flags["talk_seq"] = int(state.flags.get("talk_seq", 0)) + 1
         npc.flags["last_talk_tick"] = tick(state)
+        npc.flags["last_talk_seq"] = state.flags["talk_seq"]
 
 
 # --- load -------------------------------------------------------------------
@@ -205,9 +214,8 @@ def heartbeat(state, rooms) -> Quest | None:
         return None
     for npc_id in _candidates(state, rooms):
         quest = make_heartbeat_quest(state, npc_id)
-        if state.has_quest(quest.id):
+        if add_quest(state, quest) is None:
             continue
-        state.quests.append(quest)
         state.flags["last_heartbeat"] = now
         npc = state.npcs[npc_id]
         npc.flags["nudges"] = _nudges(state, npc_id) + 1   # so it works round the cast

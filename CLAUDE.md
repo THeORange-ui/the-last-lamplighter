@@ -79,7 +79,13 @@ Three layers enforce this, and changes usually touch all three:
    reading writes the `read_text` into that NPC's memory (so hand them a map/book and they
    actually learn it), food is consumed. It deliberately does **not** call
    `engine.items.use_item`, which applies *player* effects (healing the player, `map_read`).
-2. **`engine/quests.py`** — quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
+2. **`engine/quests.py`** — **every quest goes on the plate through `add_quest()`**, which
+   stamps `opened_seq` from the conversation counter and *refuses one that is already
+   satisfied*. `talk_to` means "speak to them **since I asked**", measured against that
+   stamp — it used to read the permanent `talked_to` flag, so an ask to go and see someone
+   the player had already met completed in the same frame it was created, and two nights of
+   substantive asks looked to the player like nothing had happened at all.
+   Quests use a bounded schema (objective type from `OBJECTIVE_TYPES`,
    target must resolve via `KnownEntities`). **`judged`** is the exception: its target is a
    plain-English criterion, `evaluate_progress` never satisfies it, and only the giver closes
    it via the `complete_quest` action — for things like "put my mind at rest about Ansel" that
@@ -470,16 +476,21 @@ Two constraints hold across the whole part:
     the third-person one — handing `first_person` to everyone present is the
     reversed-perspective bug in a new place, and it had Wren remembering passing word to
     herself.
-  - **Every night leaves exactly one thread, and never two** (`initiative.leave_a_thread`).
-    A bare `go` reads as nothing happening: in play, two nights running gave "Sella went to
-    the tavern" and "Wren went to the store", and the player woke on day two with an empty
-    agenda. So if a night's acts produced a real ask, that is the thread; if somebody acted
-    but left nothing to take up, the engine points the player at *them*; if the night was
-    quiet, it falls through to the ordinary `pacing.heartbeat`, which is substance enough on
-    its own and costs no call. The single-note rule is what stops this becoming a second
-    faucet running alongside the heartbeat. `main.progress("rest", nudge=False)` gives the
-    night first refusal, because a note naming someone who actually did something beats a
-    generic nudge.
+  - **A night's ask may be `judged`** (`OFFSCREEN_OBJECTIVES`), unlike a minor's favour.
+    What somebody wants after a night is often something only they can call settled —
+    "find out what Corvin's pass story is actually worth" has no counter that closes it,
+    and forcing it into `talk_to` turned a real question into a box-tick. Offscreen gets
+    its own doc block for the same verb via `CATALOG_DOCS`.
+  - **Every night leaves at most one thread — not at least one** (`initiative.leave_a_thread`).
+    A bare `go` reads as nothing happening, so a **substantive** act (`nightly.SUBSTANTIVE`
+    — go/take/leave) that left nothing to take up gets a note pointing at whoever made it.
+    Passing word doesn't earn one: nobody needs a quest because two people spoke, and
+    forcing one made the world feel like it was feeding the player. A quiet night falls
+    through to `pacing.heartbeat`, which keeps its own gap unless the plate is empty —
+    **so nights with nothing in them are allowed, and should be.** The single-note rule is
+    what stops this becoming a second faucet running alongside the heartbeat.
+    `main.progress("rest", nudge=False)` gives the night first refusal, because a note
+    naming someone who actually did something beats a generic nudge.
   - **`pacing` and `initiative` share one definition of findable** (`findable_rooms`:
     visited, plus one door beyond). They used to disagree — initiative could legally move
     somebody one door past the walked map, and the heartbeat, which demanded a strictly

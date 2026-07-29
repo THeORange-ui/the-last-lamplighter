@@ -110,16 +110,24 @@ def _user(world, rooms, npc_id: str, goal) -> str:
     return "\n".join(lines)
 
 
-def decide_night(world, rooms, known, npc_id: str) -> list[str]:
+# Acts that change the board and so plausibly leave the player something to take up.
+# Passing word is not one of them: nobody needs a quest because somebody spoke to
+# somebody else, and forcing a note for it made the world feel like it was feeding you.
+SUBSTANTIVE = {"go", "take", "leave"}
+
+
+def decide_night(world, rooms, known, npc_id: str) -> tuple[list[str], bool]:
     """Ask one character what they do tonight; validate and apply it.
 
-    Returns third-person lines describing what actually changed — the engine's own
-    words, never the model's, so a report can't describe something that didn't happen.
+    Returns (lines, substantive). The lines are third-person descriptions of what
+    actually changed — the engine's own words, never the model's, so a report can't
+    describe something that didn't happen. `substantive` says whether the night moved
+    anything the player could walk into, which decides whether it needs a thread.
     """
     try:
         char = load_character(npc_id)
     except KeyError:
-        return []
+        return [], False
     npc = world.npcs[npc_id]
     goal = open_goal(npc)
     was_room = npc.room
@@ -129,15 +137,17 @@ def decide_night(world, rooms, known, npc_id: str) -> list[str]:
                             temperature=0.85, max_tokens=320,
                             log_group=f"night-act:{npc_id}")
     except LLMError:
-        return []          # a night the endpoint slept through is simply a quiet one
+        return [], False   # a night the endpoint slept through is simply a quiet one
 
     actions = out.get("actions")
     if not isinstance(actions, list) or not actions:
-        return []
-    result = apply_actions(world, npc_id, actions[:MAX_ACTIONS], known, rooms,
-                           as_kind="offscreen")
+        return [], False
+    chosen = actions[:MAX_ACTIONS]
+    result = apply_actions(world, npc_id, chosen, known, rooms, as_kind="offscreen")
     if not result.effects:
-        return []          # everything they proposed was dropped; the night stays quiet
+        return [], False   # everything they proposed was dropped; the night stays quiet
+    substantive = any(str(a.get("type", "")) in SUBSTANTIVE
+                      for a in chosen if isinstance(a, dict))
 
     note_acted(world, npc_id)
     # What they did is their own experience — first-hand, and *only* theirs. Handing the
@@ -156,4 +166,4 @@ def decide_night(world, rooms, known, npc_id: str) -> list[str]:
             NPCMemory.remember_for(other, result.observed[i])
     # `effects` is the player-facing phrasing and already names who did it — prefixing
     # the name again produced "Old Perrin: Old Perrin passes word to Wren."
-    return list(result.effects)
+    return list(result.effects), substantive
