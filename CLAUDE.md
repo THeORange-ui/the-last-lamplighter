@@ -26,6 +26,15 @@ in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk 
   with `pygame.image.save(screen, path)`, then read the PNG. Prefer importing engine
   modules and asserting on `WorldState` for logic changes — the engine is UI-free and
   testable without a window.
+- **Anything about pacing must be checked by actually PLAYING, not by driving the one
+  system under test.** Testing the night by resting repeatedly with neglect flags forced
+  produced a cadence nothing like a real session's, and pronounced it healthy while the
+  real game was dominated by one character. A useful harness walks the door graph, holds
+  real conversations (`npc_respond` with `APPROACH` plus a follow-up), follows
+  `cartography.waypoints`, picks things up, and rests only when the plate is clear — then
+  measures **quests per giver, agenda beats closed per character, and nights with
+  content**. Short and thorough beats long and skippy: a dozen real turns tell you more
+  than fifty rests.
 - `settings.json` (gitignored) holds `{base_url, api_key, model}` for any OpenAI-compatible
   endpoint. **The local copy holds a live `sk-` key — never commit, print, or echo it.** Before any
   commit, confirm `settings.json`, `save/`, `runtime_memory/`, `logs/` and `.venv/` are unstaged.
@@ -536,6 +545,16 @@ From an outside player's session (not the developer's), all fixed:
   takes a concrete type, something turning on how the giver *feels* (a worry, a
   reconciliation) legitimately takes `judged`. Don't over-correct into "avoid it" — the
   forever-open failure was the missing id, not the type.
+- **Wanting to KNOW something is not `talk_to` the person who knows it.** Sella asked for
+  `talk_to corvin` when what she wanted was what his story was worth — so it closed the
+  moment the player greeted him, she never heard a word, and nothing she wanted happened.
+  Both quest doc-blocks now say to pick the type by **picturing how it ends**: if the doing
+  is the whole of it, use a concrete type; if you want to be told something, it is `judged`
+  and the answer comes back to *you*.
+- **A character who cannot count what they carry will over-promise it.** The briefing listed
+  five coins as five separate "Coin (coin)" entries and Tilda offered six; `_carried()` now
+  renders "Coin x5". And check the **kind gate** before blaming the model: she also promised
+  bread she was structurally incapable of handing over, because `minor` had no `offer_item`.
 - **`ActionResult` speaks to three audiences.** `effects` is player-facing ("Wren gives
   you: Oil Flask") and belongs only in the UI. Feeding it into memory made Wren remember
   being handed her own oil, and a bystander remember being handed it too — the real

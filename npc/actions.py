@@ -34,15 +34,20 @@ ACTIONS: dict[str, str] = {
         '                     "target": "<entity>", "count": <int>, "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item id / int / fact>"}}}\n'
         "    Offer a task. The target MUST be a real entity listed in the world briefing.\n"
-        "    Pick the type by what would actually settle it:\n"
-        "      • Something with a clear test — go and see Tilda, reach the ridge, bring me\n"
+        "    PICK THE TYPE BY PICTURING HOW IT ENDS — the moment they have done it, what\n"
+        "    tells anyone it is done?\n"
+        "      • The doing is the whole of it — go and see Tilda, reach the ridge, bring me\n"
         "        the staff — takes a concrete type (talk_to / reach / fetch / deliver /\n"
-        "        interact). Those complete themselves the moment it's done.\n"
-        "      • Something that turns on how you FEEL about it — put my mind at rest about\n"
-        "        Ansel, help me decide whether to stay, make my peace with Bram — takes\n"
-        "        \"judged\", whose target is a plain-English criterion. Nothing in the world\n"
-        "        can settle that but you, so YOU close it later with complete_quest (your\n"
-        "        open quests' ids are in your briefing).\n"
+        "        interact). Those complete themselves the moment it happens.\n"
+        "      • What you want is to be told something, to stop worrying, or to make up\n"
+        "        your mind — put my mind at rest about Ansel, find out what his story is\n"
+        "        worth, help me decide whether to stay — takes \"judged\", whose target is\n"
+        "        the state of affairs YOU will weigh up, in plain words. Nothing in the\n"
+        "        world can settle that but you, so YOU close it later with complete_quest\n"
+        "        (your open quests' ids are in your briefing).\n"
+        "    The mistake to avoid: wanting to KNOW something and asking for talk_to with\n"
+        "    whoever knows it. That closes the moment they greet him — you never hear a\n"
+        "    word of it, and nothing you wanted has actually happened.\n"
         "    Use judged where it honestly fits — worries and reconciliations are real asks —\n"
         "    just don't reach for it when a plain errand would do."
     ),
@@ -136,11 +141,21 @@ ACTIONS: dict[str, str] = {
         '                     "target": "<item id / npc id / a plain-English criterion>",\n'
         '                     "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item you CARRY / int / fact>"}}}\n'
-        "    Send word asking the outsider for one thing. Use a concrete type when there is\n"
-        "    a clear test — fetch me that, take this to her, go and speak to him. Use\n"
-        "    \"judged\" when what you want is something only YOU can call settled: find out\n"
-        "    what his story is really worth, set my mind at rest about the hollow. You close\n"
-        "    a judged one yourself, later, with complete_quest.\n"
+        "    Send word asking the outsider for one thing.\n"
+        "    CHOOSE THE TYPE BY PICTURING HOW IT ENDS. Ask yourself: the moment they have\n"
+        "    done it, what tells anyone it is done?\n"
+        "      • If the doing IS the whole of it — hand me that flask, carry this to her,\n"
+        "        go and look in on her — use fetch / deliver / talk_to. These close by\n"
+        "        themselves, the instant the thing happens.\n"
+        "      • If what you actually want is to be TOLD something, or to stop worrying,\n"
+        "        or to make up your own mind — use \"judged\", and write the target as the\n"
+        "        state of affairs YOU will weigh up, in plain words: \"I know what Corvin's\n"
+        "        pass story is really worth\". You close it yourself later with\n"
+        "        complete_quest, once they have come back and told you.\n"
+        "    A common mistake: wanting to know something and asking for talk_to with the\n"
+        "    person who knows it. That closes the moment they say hello to him — you never\n"
+        "    hear a word of it, and nothing you wanted has happened. If you want the\n"
+        "    answer, the ask is judged and the answer comes back to YOU.\n"
         "    One outstanding ask at a time, and goods come out of your own pocket."
     ),
     # --- offscreen only: the world's turn, while the player sleeps -------------
@@ -199,8 +214,13 @@ ACTION_SETS: dict[str, list[str]] = {
     # to make it a thing the player can actually track — Sella did exactly that.
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item",
                "request_help", "set_goal", "resolve_goal", "tell", "end_dialogue"],
-    "minor": ["adjust_affinity", "reveal_fact", "use_item", "request_help", "tell",
-              "end_dialogue"],
+    # `offer_item` matters even for a throwaway NPC: without it Tilda agreed to hand over
+    # bread and coins, was asked again directly, agreed again, and still could not do it —
+    # the action was dropped at this gate every time. A minor promising payment they are
+    # incapable of making is worse than a minor who never offers. It is safe, because
+    # offer_item can only move things already in their own pocket.
+    "minor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "request_help",
+              "tell", "end_dialogue"],
     # Not a character kind — the vocabulary of the world's turn. Gated through the same
     # `allowed_actions()` check as everything else, so these can never fire in dialogue
     # and a conversational action can never fire at night.

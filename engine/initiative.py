@@ -95,7 +95,12 @@ def pressure(world, npc_id: str) -> int:
     stale = int(goal.get("stale", 0))
     quiet = pacing.tick(world) - int(npc.flags.get("last_talk_tick", 0))
     unmet = 0 if npc.talked_to else 1
-    return stale + (quiet // pacing.MIN_GAP) + unmet
+    # Arc parity, the same idea `pacing.restraint` applies in conversation. Without it
+    # the character whose story is already furthest along keeps earning nights and pulls
+    # further ahead — Wren was two beats up on a cast where two people had none.
+    mine, avg = pacing.arc_standing(world, npc_id)
+    ahead = 1 if mine > avg + 0.5 else 0
+    return stale + (quiet // pacing.MIN_GAP) + unmet - ahead
 
 
 def candidates(world, rooms) -> list[str]:

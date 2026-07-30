@@ -108,6 +108,15 @@ def _here_block(world, rooms, npc_id) -> str:
     return "\n".join(lines)
 
 
+def _carried(inventory) -> str:
+    """"Bread x2 (bread), Coin x5 (coin)" — with the number, so it can be promised
+    accurately. A character who cannot count what they hold will over-promise it."""
+    from collections import Counter
+    counts = Counter(inventory)
+    return ", ".join(f"{display_name(i)}{f' x{n}' if n > 1 else ''} ({i})"
+                     for i, n in counts.items())
+
+
 def _world_briefing(world, rooms, known, npc_id) -> str:
     npc = world.npcs[npc_id]
     lit = world.lit_lamp_count()
@@ -129,8 +138,10 @@ def _world_briefing(world, rooms, known, npc_id) -> str:
         "The only items that exist (reference these ids, never invent others):\n"
         + catalog_for_prompt(),
         "",
+        # Counted, not listed one at a time: five coins rendered as "Coin (coin)" five
+        # times over is something a reader has to tally, and Tilda offered six of them.
         "You are carrying (you may offer any of these, and only these): "
-        + (", ".join(display_name(i) + f" ({i})" for i in npc.inventory) or "nothing"),
+        + (_carried(npc.inventory) or "nothing"),
     ]
     if world.active_quests():
         lines.append(
