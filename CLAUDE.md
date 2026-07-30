@@ -29,12 +29,19 @@ in permanent dusk; the goal is to reach the ridge and confront (fight *or* talk 
 - **Anything about pacing must be checked by actually PLAYING, not by driving the one
   system under test.** Testing the night by resting repeatedly with neglect flags forced
   produced a cadence nothing like a real session's, and pronounced it healthy while the
-  real game was dominated by one character. A useful harness walks the door graph, holds
-  real conversations (`npc_respond` with `APPROACH` plus a follow-up), follows
-  `cartography.waypoints`, picks things up, and rests only when the plate is clear — then
-  measures **quests per giver, agenda beats closed per character, and nights with
-  content**. Short and thorough beats long and skippy: a dozen real turns tell you more
-  than fifty rests.
+  real game was dominated by one character. Short and thorough beats long and skippy: a
+  dozen real turns tell you more than fifty rests. Use the harness:
+  ```bash
+  .venv/bin/python tools/playsession.py --turns 26 --seed 7
+  ```
+  It walks the door graph, holds real conversations, follows `cartography.waypoints`,
+  picks things up, and rests only when the plate is clear — then reports **quests per
+  giver, agenda beats closed per character, and how many nights held anything**, which is
+  where lopsidedness shows up. It costs real LLM calls (roughly one per conversation).
+  **It redirects `save/` and `runtime_memory/` into a temp sandbox**, because it builds a
+  `Game(fresh=True)` and that wipes every slot — an earlier un-sandboxed version of this
+  script deleted a playtest save. Anything else that constructs a `Game` in a script must
+  do the same.
 - `settings.json` (gitignored) holds `{base_url, api_key, model}` for any OpenAI-compatible
   endpoint. **The local copy holds a live `sk-` key — never commit, print, or echo it.** Before any
   commit, confirm `settings.json`, `save/`, `runtime_memory/`, `logs/` and `.venv/` are unstaged.
