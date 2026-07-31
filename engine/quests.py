@@ -172,14 +172,23 @@ def build_quest(data: dict, giver: str, known: "KnownEntities",
 
 # What a `minor` character is allowed to ask for. No `reach` or `interact`: those are
 # progression-shaped, and a throwaway NPC should never be steering the main line.
-MINOR_OBJECTIVES = {"fetch", "deliver", "talk_to"}
+# What a `minor` may ask for, and what a night's ask may be. `judged` is in both: what
+# somebody wants is often something only they can call settled — "find out whether
+# Corvin's story is worth anything" has no counter that closes it, and forcing it into
+# `talk_to` turns a real question into a box-tick. It is safe here because the rails
+# that make an ask small are count=1 and no follow-ups, neither of which judged touches.
+# It is only safe as long as the giver's kind can also use `complete_quest` — a judged
+# quest whose giver cannot close it is open forever. See ACTION_SETS.
+MINOR_OBJECTIVES = {"fetch", "deliver", "talk_to", "judged"}
 
 # What an *offscreen* ask may be. Same rails, plus `judged`: a night's ask is often
 # something only the asker can call settled — "find out what Corvin's pass story is
 # actually worth" has no counter that closes it, and forcing it into `talk_to` made a
 # real question into a box-tick. The giver closes it with `complete_quest`, whose ids
 # are in their briefing.
-OFFSCREEN_OBJECTIVES = MINOR_OBJECTIVES | {"judged"}
+# The night's asks are the same set. They were briefly wider (judged was allowed here
+# and nowhere else); kept as its own name because the two have no reason to stay equal.
+OFFSCREEN_OBJECTIVES = set(MINOR_OBJECTIVES)
 
 
 def build_simple_quest(data: dict, giver: str, known: "KnownEntities",
@@ -261,8 +270,16 @@ def evaluate_progress(quest: Quest, state) -> int:
     if o.type == "interact":
         from engine.interact import used_count   # local: engine.interact imports items
         return min(used_count(state, o.target), o.count)
-    if o.type in ("fetch", "deliver"):
+    if o.type == "fetch":
         return min(state.player.inventory.count(o.target), o.count)
+    if o.type == "deliver":
+        # In whose hands? Theirs. This used to count the *player's* inventory, which
+        # made deliver a byte-for-byte copy of fetch: Tilda asked for her tin locket
+        # back and the quest closed the instant the player picked it up off the floor,
+        # having never gone anywhere near her. The whole difference between the two
+        # types is the handing over, so that is what gets counted.
+        target = state.npcs.get(o.npc)
+        return min(target.inventory.count(o.target), o.count) if target else 0
     if o.type == "talk_to":
         # Being asked to go and speak to someone means speaking to them *now*, not
         # having met them once before. Measured against when the quest was handed over.

@@ -86,7 +86,13 @@ Three layers enforce this, and changes usually touch all three:
    `ACTION_SETS`, and add a validated branch. (`join_combat` is a legacy alias of `join_party`.)
    `minor` characters get **`request_help`** instead of `give_quest` — same grounding, then
    railed by `build_simple_quest` so a throwaway NPC can ask a favour but never steer the
-   main line.
+   main line. What makes an ask small is **count=1 and no follow-ups**, not the objective
+   type, which is why `judged` is allowed here too.
+   **Any kind that can ask for something must also have `complete_quest`.** A `judged`
+   quest is closed by exactly one thing — the giver saying so — so a kind that can create
+   one without being able to close one creates threads that are dead on arrival. `vendor`
+   had exactly that hole: Sella could raise a judged ask on her night and never settle it,
+   and it read in play as her deliberately holding out.
    The `main` set also includes **`set_goal`/`resolve_goal`** (the agenda — see
    `npc/agenda.py`) and `tell` — one NPC passes word to others, writing a line into each
    target's memory via `NPCMemory.remember_for` (a live-instance registry keeps that write on
@@ -618,6 +624,12 @@ From an outside player's session (not the developer's), all fixed:
   being handed her own oil, and a bystander remember being handed it too — the real
   source of the scrambled summaries. Use `self_effects` (first person, the actor) and
   `observed` (third person, onlookers); `_note()` fills all three at once.
+- **`deliver` was a copy of `fetch`.** `evaluate_progress` counted the *player's*
+  inventory for both, so "take Tilda her locket" completed the instant the player picked
+  the locket up off the floor, having never gone near her. It now counts the item in the
+  target NPC's inventory — the handing over is the entire difference between the two
+  types. If you add an objective type, write the test that distinguishes it from its
+  neighbour.
 - **A `judged` quest must tell the player how it ends** — `build_quest` appends "Tell
   &lt;giver&gt; about it when you're done", because doing the thing produces no feedback.
 - **Memory compaction confused the NPC with the player.** Bram's summary had *him*

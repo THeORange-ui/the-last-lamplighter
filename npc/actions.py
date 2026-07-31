@@ -38,7 +38,9 @@ ACTIONS: dict[str, str] = {
         "    tells anyone it is done?\n"
         "      • The doing is the whole of it — go and see Tilda, reach the ridge, bring me\n"
         "        the staff — takes a concrete type (talk_to / reach / fetch / deliver /\n"
-        "        interact). Those complete themselves the moment it happens.\n"
+        "        interact). Those complete themselves the moment it happens. \"fetch\" ends\n"
+        "        when the player is holding it; \"deliver\" ends only when it is in the\n"
+        "        named person's hands, so use deliver whenever it has to reach somebody.\n"
         "      • What you want is to be told something, to stop worrying, or to make up\n"
         "        your mind — put my mind at rest about Ansel, find out what his story is\n"
         "        worth, help me decide whether to stay — takes \"judged\", whose target is\n"
@@ -54,13 +56,28 @@ ACTIONS: dict[str, str] = {
     "request_help": (
         '- {"type": "request_help", "quest": {\n'
         '       "title": "<short>", "description": "<one sentence>",\n'
-        '       "objective": {"type": "fetch|deliver|talk_to", "target": "<item or npc id>",\n'
+        '       "objective": {"type": "fetch|deliver|talk_to|judged",\n'
+        '                     "target": "<item id / npc id / a plain-English criterion>",\n'
         '                     "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item you CARRY / int / fact>"}}}\n'
         "    Ask the player for one small favour — something you have lost, something that\n"
-        "    needs taking to someone, someone you need spoken to. Keep it small and real to\n"
-        "    your own life; you are not sending anyone up the mountain. You may only have\n"
-        "    ONE favour outstanding, and if you pay in goods it comes out of your own pocket."
+        "    needs taking to someone, someone you need spoken to, something you need to\n"
+        "    know. Keep it small and real to your own life; you are not sending anyone up\n"
+        "    the mountain.\n"
+        "    CHOOSE THE TYPE BY PICTURING HOW IT ENDS — the moment they have done it, what\n"
+        "    tells anyone it is done?\n"
+        "      • The doing IS the whole of it — hand me that flask, carry this to her, go\n"
+        "        and look in on him — use fetch / deliver / talk_to. These close by\n"
+        "        themselves. Note that \"deliver\" only ends when the thing is in that\n"
+        "        person's hands, not when the player has picked it up.\n"
+        "      • What you want is to be TOLD something, or to stop worrying — use\n"
+        "        \"judged\", and write the target as the state of affairs YOU will weigh\n"
+        "        up, in plain words. You close it yourself with complete_quest once they\n"
+        "        come back and tell you (your quest ids are in your briefing).\n"
+        "    A common mistake: wanting to know something and asking for talk_to with the\n"
+        "    person who knows it. That closes the moment they say hello to him — you never\n"
+        "    hear a word of it, and nothing you wanted has happened.\n"
+        "    ONE favour outstanding at a time, and goods come out of your own pocket."
     ),
     "complete_quest": (
         '- {"type": "complete_quest", "quest_id": "<id of a quest YOU gave>", "because": "<why>"}\n'
@@ -213,14 +230,20 @@ ACTION_SETS: dict[str, list[str]] = {
     # `request_help` too, or a vendor can ask for something concrete and have no way
     # to make it a thing the player can actually track — Sella did exactly that.
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item",
-               "request_help", "set_goal", "resolve_goal", "tell", "end_dialogue"],
+               "request_help", "complete_quest", "set_goal", "resolve_goal", "tell",
+               "end_dialogue"],
     # `offer_item` matters even for a throwaway NPC: without it Tilda agreed to hand over
     # bread and coins, was asked again directly, agreed again, and still could not do it —
     # the action was dropped at this gate every time. A minor promising payment they are
     # incapable of making is worse than a minor who never offers. It is safe, because
     # offer_item can only move things already in their own pocket.
+    # `complete_quest` is not optional for anyone who can ask for something. A `judged`
+    # ask is closed by exactly one thing — the giver saying it is done — so a kind that
+    # can create one and cannot close one creates threads that are dead on arrival.
+    # Sella did precisely that: a night's ask, priced in her own judgement, that she was
+    # structurally incapable of ever settling. It read as her holding out.
     "minor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "request_help",
-              "tell", "end_dialogue"],
+              "complete_quest", "tell", "end_dialogue"],
     # Not a character kind — the vocabulary of the world's turn. Gated through the same
     # `allowed_actions()` check as everything else, so these can never fire in dialogue
     # and a conversational action can never fire at night.
