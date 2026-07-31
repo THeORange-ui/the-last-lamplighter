@@ -29,7 +29,9 @@ from ui.render import draw_text, wrap_text
 REVEAL_CPS = 55          # characters per second for the typewriter
 CLOSE_LOCKOUT = 0.4      # ignore keys this long after a parting line, so a held key
                          # can't dismiss it before it has been read
-_INPUT_LINES = 3         # wrapped lines of the input shown at once (a window, not a tail)
+_INPUT_LINES = 2         # wrapped lines of the input shown at once — a window that
+                         # follows the caret, so a longer message scrolls inside it
+                         # rather than pushing the reply off the top of the box
 MAX_INPUT = 400          # characters you may type in one message
 MAX_ASIDES = 2           # most times a bystander may cut into one conversation
 JOIN_ASIDES = 2          # extra cut-ins earned by a companion you deliberately pulled in
