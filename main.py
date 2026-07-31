@@ -198,11 +198,14 @@ class Game:
         if action == "close":
             self.party_open = False
         elif action == "talk":
-            if self.scene == "dialogue":
-                # Opened from the conversation hub. Walking off mid-sentence to start a
-                # different conversation is not what "P" meant here.
-                if self.party_panel:
-                    self.party_panel.message = "Not while you're talking to someone."
+            if self.scene == "dialogue" and self.dialogue:
+                # Opened from the conversation hub, where picking a companion means
+                # waving them into the conversation rather than starting another one.
+                why = self.dialogue.bring_in(cmd["npc"])
+                if why and self.party_panel:
+                    self.party_panel.message = why
+                else:
+                    self.party_open = False
                 return
             # Talk to a companion in a normal conversation. If you ask them to part
             # ways, they decide to leave (the leave_party action), and no other way.
@@ -225,7 +228,7 @@ class Game:
         elif what == "map":
             self.map_open = True
         elif what == "party":
-            self.party_panel = PartyPanel(self.world)
+            self.party_panel = PartyPanel(self.world, in_conversation=True)
             self.party_open = True
         elif what == "notes":
             self.notes_panel = NotesPanel(self.world)

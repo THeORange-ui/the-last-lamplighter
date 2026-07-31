@@ -16,7 +16,7 @@ from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from llm import log as llm_log
 from npc.agent import APPROACH, npc_respond
-from npc.interject import interject
+from npc.interject import interject, join_conversation
 from npc.memory import NPCMemory
 from npc.roster import character_name, load_character
 from ui import theme as T
@@ -32,6 +32,8 @@ _BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
 _BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
 _INPUT_LINES = 3         # how many wrapped lines of the input to show (tail)
 MAX_ASIDES = 2           # most times a bystander may cut into one conversation
+JOIN_ASIDES = 2          # extra cut-ins earned by a companion you deliberately pulled in
+PLAYER_LABEL = "The outsider"   # how the player is named *to another character*
 
 BOX_H = 280              # replies routinely ran past the old 198 and buried the input
 LINE_H = 25              # one body line; uniform, which is what makes scrolling simple
@@ -111,6 +113,9 @@ class DialogueBox:
         self.aside: tuple[str, str] | None = None      # (npc_id, line)
         self._aside_job: dict | None = None
         self._asides_left = MAX_ASIDES
+        # Companions the player has pulled into this conversation (P in the hub). They
+        # get a bigger share of the cut-ins and go first when the speaker names anyone.
+        self._joined: set[str] = set()
 
         self._start_turn(APPROACH)
 
@@ -140,7 +145,9 @@ class DialogueBox:
         if self._asides_left <= 0 or self._aside_job is not None:
             return
         here = self.world.npcs[self.npc_id].room
-        for nid in out.get("invoke_others") or []:
+        named = list(out.get("invoke_others") or [])
+        named.sort(key=lambda n: n not in self._joined)   # whoever you brought in first
+        for nid in named:
             npc = self.world.npcs.get(nid)
             if npc is None or nid == self.npc_id or npc.room != here:
                 continue
@@ -160,6 +167,47 @@ class DialogueBox:
             self._aside_job = job
             self._asides_left -= 1
             return
+
+    def bring_in(self, npc_id: str) -> str:
+        """Wave a companion into this conversation (P in the hub, then Enter).
+
+        They are already standing here — party members travel at your shoulder — so what
+        actually changes is that they arrive *knowing what has been said*, say something
+        about it, and speak up more often afterwards. Runs on a worker thread like every
+        other call in this box; returns "" on success, or why not.
+        """
+        if npc_id == self.npc_id:
+            return "You're already talking to them."
+        if npc_id in self._joined:
+            return "They're already in on this."
+        if self._aside_job is not None:
+            return "Someone's already speaking up."
+        npc = self.world.npcs.get(npc_id)
+        if npc is None or npc.room != self.world.npcs[self.npc_id].room:
+            return "They're not here."
+
+        # "You" is the *character* in every prompt this game writes, so the player has
+        # to be named in the third person here or Wren reads her own question back as
+        # hers. This codebase has shipped that confusion three times; see the memory
+        # compaction note in CLAUDE.md.
+        said = [(PLAYER_LABEL if who == YOU else character_name(who), text)
+                for who, text in self.transcript]
+        job = {"done": False, "npc": npc_id, "text": ""}
+
+        def run():
+            try:
+                job["text"] = join_conversation(self.world, npc_id, self.npc_id,
+                                                said, NPCMemory(npc_id))
+            except Exception:                                   # noqa: BLE001
+                job["text"] = ""
+            job["done"] = True
+
+        threading.Thread(target=run, daemon=True).start()
+        self._aside_job = job
+        self._joined.add(npc_id)
+        self._asides_left += JOIN_ASIDES
+        self.hub = None                 # you waved them over; watch them arrive
+        return ""
 
     def _consume_result(self, out: dict):
         self.npc_line = out.get("dialogue", "…")

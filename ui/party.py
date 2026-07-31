@@ -18,10 +18,13 @@ from ui.render import draw_text
 
 
 class PartyPanel:
-    def __init__(self, world):
+    def __init__(self, world, *, in_conversation: bool = False):
         self.world = world
         self.sel = 0
         self.message = ""
+        # Opened from the conversation hub, Enter means "wave them over" rather than
+        # "go and talk to them instead". Same command, different sentence.
+        self.in_conversation = in_conversation
 
     def _members(self):
         return list(self.world.party)
@@ -63,11 +66,16 @@ class PartyPanel:
                 draw_text(screen, ("> " if sel else "   ") + label, (m, y),
                           T.font(20, bold=sel), T.HEARTH if sel else T.TEXT)
                 y += 32
-            draw_text(screen, "They fight at your side. Press Enter to talk — and if you",
-                      (m, y + 12), T.font(15), T.TEXT_DIM)
-            draw_text(screen, "ask them to, they'll part ways.",
-                      (m, y + 34), T.font(15), T.TEXT_DIM)
+            if self.in_conversation:
+                blurb = ("Press Enter to wave one of them into the conversation.",
+                         "They'll have heard most of it, and won't stay quiet after.")
+            else:
+                blurb = ("They fight at your side. Press Enter to talk — and if you",
+                         "ask them to, they'll part ways.")
+            draw_text(screen, blurb[0], (m, y + 12), T.font(15), T.TEXT_DIM)
+            draw_text(screen, blurb[1], (m, y + 34), T.font(15), T.TEXT_DIM)
         if self.message:
             draw_text(screen, self.message, (m, T.SCREEN_H - 56), T.font(14), T.EFFECT)
-        draw_text(screen, "Up/Down select · Enter talk · P/Esc close",
+        verb = "bring in" if self.in_conversation else "talk"
+        draw_text(screen, f"Up/Down select · Enter {verb} · P/Esc close",
                   (T.SCREEN_W // 2, T.SCREEN_H - 30), T.font(14), T.TEXT_DIM, center=True)

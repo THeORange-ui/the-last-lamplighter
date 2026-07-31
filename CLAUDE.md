@@ -262,6 +262,15 @@ Three layers enforce this, and changes usually touch all three:
   beats on room entry, interactable use and pickups, runs the call on a worker thread, and
   `draw_bark()` shows it above the HUD in the speaker's colour. Measured: ~1 interjection per
   30 room entries.
+  **`join_conversation()`** is the third specialist here: the player waves a companion into a
+  conversation (hub → `P` → Enter → `DialogueBox.bring_in`) and they arrive *knowing what has
+  been said* — the transcript goes into the prompt and into their memory — say one line, and
+  get a bigger share of the cut-ins (`JOIN_ASIDES`) plus priority when the speaker names
+  anyone. Party members are standing there already; what changes is that they're now in it.
+  **The player is named in the third person when a transcript is shown to another
+  character** (`PLAYER_LABEL`). "You" means the character in every prompt this game writes,
+  so handing Wren a line labelled "You" makes her read the player's question as her own —
+  the same reversed-perspective bug as the memory-compaction and night-report ones.
 - `memory.py` — per-NPC memory (`{summary, pinned, entries, seeded}`) in `runtime_memory/`,
   write-through per turn; auto-compacts via the LLM past a threshold (`agent.summarize_memory`,
   run in the dialogue worker thread). **`pinned`** holds what the character carries around
@@ -364,8 +373,9 @@ the JSON object), raising `LLMError` on failure.
   — a letter key would collide with typing a message, so don't reintroduce one in the
   dialogue box. The hub shows **the transcript of this conversation** and puts the ordinary
   function keys back within reach: `I` trade (the **`ShopPanel`** for a `vendor`, the barter
-  `TradePanel` otherwise), `P` party, `J` journal, `M` map, `N` notes, `Esc` back to the
-  conversation. It was a trap before — mid-conversation is exactly when you want to re-read a
+  `TradePanel` otherwise), `P` party — where Enter **brings a companion into the
+  conversation** rather than starting a new one — `J` journal, `M` map, `N` notes, `Esc` back
+  to the conversation. It was a trap before — mid-conversation is exactly when you want to re-read a
   quest or check where someone lives, and the only keys that did anything were typing.
   The hub is **pure UI**: `handle_event` returns a command dict, `DialogueBox._handle_hub`
   opens the trade panel itself and hands everything else to `main.Game` via

@@ -113,3 +113,57 @@ def interject(world, npc_id: str, beat: dict, memory) -> str:
         _mark(world, npc_id, beat)
         memory.remember(f'Seeing {beat["text"]}, you said: "{line}"')
     return line
+
+
+JOIN_LINES = 8           # how much of the exchange a newcomer is handed
+
+
+def join_conversation(world, npc_id: str, host_id: str, said: list, memory) -> str:
+    """A companion waved into a conversation that is already going.
+
+    The point of bringing someone over is that they arrive *knowing what was said* — a
+    companion who joins knowing nothing is just another bystander, which is what they
+    already were. So they get the exchange so far, both in the prompt and written into
+    their memory, and one line on arriving.
+
+    Same shape as `interject`: one short call, no actions, silence is a fine answer.
+    `said` is [(speaker display name, line)] — already rendered, so npc/ stays clear of
+    ui/. Never hand this the third-person phrasing; the memory it writes is theirs.
+    """
+    try:
+        char = load_character(npc_id)
+    except KeyError:
+        return ""
+    from npc.roster import character_name
+    host = character_name(host_id)
+    recent = said[-JOIN_LINES:]
+    goal = open_goal(world.npcs[npc_id])
+    transcript = "\n".join(f"{who}: {text}" for who, text in recent) or "(nothing yet)"
+    system = (
+        f"You are {char['name']} — {char.get('role', '')}.\n"
+        f"Personality: {char.get('personality', '')}\n"
+        f"Speech style: {char.get('speech_style', '')}\n"
+        + (f"What you are trying to do: {goal['want']}\n" if goal else "")
+        + f"\nYou are travelling with the outsider. They have just waved you over into a "
+          f"conversation they were already having with {host}, so you are part of it now.\n"
+          "You have been standing near enough to have caught most of it.\n\n"
+          "Say ONE line, out loud, as you step in. Under 30 words. Speak to whichever of "
+          "them you would actually be speaking to. You might take a side, ask the thing "
+          "neither of them has asked, or say something dry about being dragged into it — "
+          "whatever you would honestly say. Do not summarise what was said; they were "
+          "both there.\n"
+          'Reply as JSON: {"line": "<what you say, or empty>"}'
+    )
+    user = f"What has been said so far:\n{transcript}\n\nYou step in. What do you say?"
+    try:
+        out = complete_json(system, user, temperature=0.9, max_tokens=110,
+                            log_group=f"join:{npc_id}")
+    except LLMError:
+        return ""
+    line = str(out.get("line", "")).strip()[:_MAX_LINE]
+    heard = " / ".join(f"{who}: {text[:90]}" for who, text in recent[-3:])
+    memory.remember(
+        f"The outsider brought you into their conversation with {host}. "
+        f"You heard: {heard}" + (f' You said: "{line}"' if line else "")
+    )
+    return line
