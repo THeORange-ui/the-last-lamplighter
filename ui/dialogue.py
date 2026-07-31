@@ -23,26 +23,28 @@ from ui import theme as T
 from ui.convhub import YOU, ConvHub
 from ui.inventory import TradePanel
 from ui.shop import ShopPanel
+from ui.textinput import TextInput
 from ui.render import draw_text, wrap_text
 
 REVEAL_CPS = 55          # characters per second for the typewriter
 CLOSE_LOCKOUT = 0.4      # ignore keys this long after a parting line, so a held key
                          # can't dismiss it before it has been read
-_BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
-_BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
-_INPUT_LINES = 3         # how many wrapped lines of the input to show (tail)
+_INPUT_LINES = 3         # wrapped lines of the input shown at once (a window, not a tail)
+MAX_INPUT = 400          # characters you may type in one message
 MAX_ASIDES = 2           # most times a bystander may cut into one conversation
 JOIN_ASIDES = 2          # extra cut-ins earned by a companion you deliberately pulled in
 PLAYER_LABEL = "The outsider"   # how the player is named *to another character*
 
-BOX_H = 280              # replies routinely ran past the old 198 and buried the input
+BOX_H = 200              # back to about its old size, now that the body scrolls
 LINE_H = 25              # one body line; uniform, which is what makes scrolling simple
 INPUT_LINE_H = 22
 
-# Ctrl / Cmd opens the conversation hub (a letter key would collide with typing).
+# Ctrl / Cmd opens the conversation hub (a letter key would collide with typing) — but
+# only on *release*, and only if nothing was pressed while it was held. Opening on the
+# key-down made Cmd-Left ("jump to the start of the line") open the hub instead.
 HUB_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
 # The body scrolls, because a long reply plus a cut-in does not fit any box we could
-# reasonably draw over the world. Arrows are free here — typing never produces them.
+# reasonably draw over the world. Up/Down are free here — typing never produces them.
 SCROLL_UP = (pygame.K_UP, pygame.K_PAGEUP)
 SCROLL_DOWN = (pygame.K_DOWN, pygame.K_PAGEDOWN)
 
@@ -83,7 +85,7 @@ class DialogueBox:
         except KeyError:
             self._is_vendor = False
 
-        self.input_text = ""
+        self.input = TextInput(MAX_INPUT)
         self.npc_line = ""
         self.reveal = 0.0
         self.mode = "thinking"          # thinking | reveal | await | closing
@@ -96,8 +98,9 @@ class DialogueBox:
         self.scroll = 0
         self._max_scroll = 0            # recomputed each draw, once the box is measured
         self._end_after_reveal = False
-        self._caret = 0.0
-        self._bs_timer = _BS_DELAY               # backspace hold-to-repeat countdown
+        self._blink = 0.0
+        self._mod_down = False          # a Ctrl/Cmd is held; see HUB_KEYS
+        self._mod_used = False          # ...and something was pressed with it
         self.trade: TradePanel | None = None
         # What has actually been said, in order. Feeds the hub's history view and the
         # notes, and is the thing a companion would need if they were pulled in.
@@ -235,7 +238,7 @@ class DialogueBox:
 
     # --- update / events --------------------------------------------------
     def update(self, dt):
-        self._caret = (self._caret + dt) % 1.0
+        self._blink = (self._blink + dt) % 1.0
         if self._aside_job is not None and self._aside_job["done"]:
             job, self._aside_job = self._aside_job, None
             if job["text"]:
@@ -258,19 +261,25 @@ class DialogueBox:
             # now waits to be dismissed; the timer is only a guard against a held key.
             self._close_timer -= dt
 
-        # Hold Backspace to keep deleting (the first delete happens on key-down).
-        if self.mode == "await" and self.input_text and \
-                pygame.key.get_pressed()[pygame.K_BACKSPACE]:
-            self._bs_timer -= dt
-            if self._bs_timer <= 0:
-                self.input_text = self.input_text[:-1]
-                self._bs_timer = _BS_INTERVAL
-        else:
-            self._bs_timer = _BS_DELAY
+        self.input.update(dt, active=(self.mode == "await" and self.hub is None
+                                      and self.trade is None))
 
     def handle_event(self, event):
+        # Ctrl/Cmd is both "open the hub" and the modifier for Cmd-Left and friends, so
+        # it can only mean the former once it is released having done nothing else.
+        if event.type == pygame.KEYUP:
+            if event.key in HUB_KEYS and self._mod_down:
+                bare, self._mod_down, self._mod_used = not self._mod_used, False, False
+                if bare and self.trade is None:
+                    self._toggle_hub()
+            return
         if event.type != pygame.KEYDOWN:
             return
+        if event.key in HUB_KEYS:
+            self._mod_down, self._mod_used = True, False
+            return
+        if self._mod_down:
+            self._mod_used = True
         if self.trade is not None:
             cmd = self.trade.handle_event(event)
             if cmd:
@@ -291,12 +300,6 @@ class DialogueBox:
         if event.key == pygame.K_ESCAPE:
             self.finished = True
             return
-        # Ctrl/Cmd steps out of typing and into the hub, where letters are commands
-        # again. Trade is one of them now rather than the only thing Ctrl could do.
-        if event.key in HUB_KEYS:
-            self.hub = ConvHub(self.world, self.npc_id, self.transcript,
-                               is_vendor=self._is_vendor)
-            return
         if self.mode == "closing":
             if self._close_timer <= 0:
                 self.finished = True
@@ -308,15 +311,17 @@ class DialogueBox:
         if self.mode != "await":
             return
         if event.key == pygame.K_RETURN:
-            text = self.input_text.strip()
+            text = self.input.text.strip()
             if text:
-                self.input_text = ""
+                self.input.clear()
                 self._start_turn(text)
-        elif event.key == pygame.K_BACKSPACE:
-            self.input_text = self.input_text[:-1]
-            self._bs_timer = _BS_DELAY        # pause before hold-repeat kicks in
-        elif event.unicode and event.unicode.isprintable() and len(self.input_text) < 160:
-            self.input_text += event.unicode
+        else:
+            self.input.handle_key(event)
+
+    def _toggle_hub(self) -> None:
+        self.hub = (None if self.hub is not None
+                    else ConvHub(self.world, self.npc_id, self.transcript,
+                                 is_vendor=self._is_vendor))
 
     def _handle_hub(self, cmd):
         """The hub asks; this decides. Trade it can open itself, since the panel is
@@ -420,12 +425,9 @@ class DialogueBox:
         if self._max_scroll:            # last frame's, which is close enough for a hint
             tlabel = "Up/Down scroll · " + tlabel
         reserve = T.font(13).size(tlabel)[0] + 24     # keep typing clear of the hint
-        if self.mode == "await":
-            in_lines = (wrap_text("> " + self.input_text, inp_font, max_w - reserve)
-                        or ["> "])[-_INPUT_LINES:]
-        else:
-            in_lines = [""]                      # one row, for the hint
-        input_top = box.bottom - 12 - INPUT_LINE_H * len(in_lines)
+        lay = self.input.layout(inp_font, max_w - reserve, max_lines=_INPUT_LINES)
+        rows = lay.shown if self.mode == "await" else 1     # one row for the hint
+        input_top = box.bottom - 12 - INPUT_LINE_H * rows
         rule_y = input_top - 8
         banner = self.banner[:2]
         banner_top = rule_y - 6 - 18 * len(banner)
@@ -434,7 +436,7 @@ class DialogueBox:
         # --- the NPC's words, in a clipped, scrollable viewport ---
         view = pygame.Rect(body_x, body_y, max_w, max(LINE_H, body_bot - body_y))
         if self.mode == "thinking":
-            draw_text(screen, "." * (1 + int(self._caret * 3)), (body_x, body_y),
+            draw_text(screen, "." * (1 + int(self._blink * 3)), (body_x, body_y),
                       T.font(22), T.TEXT_DIM)
         else:
             lines = self._body_lines(max_w)
@@ -461,12 +463,8 @@ class DialogueBox:
         pygame.draw.line(screen, T.WALL, (box.left + 14, rule_y),
                          (box.right - 14, rule_y), 1)
         if self.mode == "await":
-            caret = "|" if self._caret < 0.5 else ""
-            ly = input_top
-            for i, ln in enumerate(in_lines):
-                draw_text(screen, ln + (caret if i == len(in_lines) - 1 else ""),
-                          (body_x, ly), inp_font, T.TEXT)
-                ly += INPUT_LINE_H
+            self.input.draw(screen, (body_x, input_top), inp_font, lay,
+                            line_h=INPUT_LINE_H, blink=self._blink)
             draw_text(screen, tlabel, (box.right - 16, input_top + 2),
                       T.font(13), T.TEXT_DIM, right=True)
         elif self.mode == "reveal":

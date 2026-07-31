@@ -294,7 +294,8 @@ the JSON object), raising `LLMError` on failure.
 - `render.py` (`draw_overworld` with per-biome palettes, drawing interactables by `kind` and
   skipping `hidden` ones, HUD day, `wrap_text` —
   lives here to avoid a dialogue↔inventory import cycle), `dialogue.py`, `convhub.py`
-  (`ConvHub` — the in-conversation hub), `combat.py`,
+  (`ConvHub` — the in-conversation hub), `textinput.py` (`TextInput` — the editable line
+  with a caret, shared by the dialogue box and the combat ACT box), `combat.py`,
   `inventory.py` (`InventoryPanel` + in-conversation `TradePanel`), `shop.py` (`ShopPanel` —
   vendors, margin prices; opened by `I` in the hub when talking to a `vendor`), `storage.py`
   (`StoragePanel` — the camp chest), `party.py` (`PartyPanel`), `journal.py`, `menu.py`,
@@ -369,9 +370,21 @@ the JSON object), raising `LLMError` on failure.
 - **`Show` transfers nothing** — it's the third trade verb and exists so putting an object in
   front of someone isn't an act of commerce. The NPC's briefing already carries their own
   words about anything present they have a bond with, so the reaction comes for free.
+- **Typing anywhere goes through `ui/textinput.py: TextInput`** — the dialogue box and the
+  combat ACT box are the only two places the player types, and both were append-only with
+  no caret, so fixing a typo six words back meant retyping six words. `TextInput` owns
+  editing (Left/Right, Alt+arrow by word, Cmd/Ctrl+arrow to the ends, Home/End, Delete,
+  hold-to-repeat) and drawing, but **not layout** — the caller asks for a `layout()` and
+  places it, because the dialogue box grows its input upward into the reply and the combat
+  box doesn't. It wraps to **(start, end) index pairs, not strings**: the caret has to sit
+  at an exact character, and recovering offsets from wrapped strings breaks the moment the
+  text contains a double space. The visible window follows the **caret**, not the tail —
+  a tail hides you doing the very thing the caret is for.
 - **Ctrl/Cmd inside a conversation opens the hub** (`ui/convhub.py`, `dialogue.py: HUB_KEYS`)
   — a letter key would collide with typing a message, so don't reintroduce one in the
-  dialogue box. The hub shows **the transcript of this conversation** and puts the ordinary
+  dialogue box. It opens on **key-up, and only if nothing else was pressed while it was
+  held**: opening on the key-down meant Cmd-Left ("jump to the start of the line") opened
+  the hub instead of moving the caret. The hub shows **the transcript of this conversation** and puts the ordinary
   function keys back within reach: `I` trade (the **`ShopPanel`** for a `vendor`, the barter
   `TradePanel` otherwise), `P` party — where Enter **brings a companion into the
   conversation** rather than starting a new one — `J` journal, `M` map, `N` notes, `Esc` back

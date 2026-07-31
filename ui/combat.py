@@ -14,10 +14,10 @@ from engine.items import ITEMS, display_name
 from npc.combat_agent import ally_turn, enemy_turn, mercy_attempt, speak_to_ally
 from ui import sprites
 from ui import theme as T
+from ui.textinput import TextInput
 from ui.render import draw_text, wrap_text
 
-_BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
-_BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
+MAX_ACT = 240            # characters you may say to something in one breath
 
 
 class CombatScene:
@@ -27,13 +27,12 @@ class CombatScene:
         self.phase = "menu"          # menu | act_target | act_input | item | target | resolving | ended
         self.sel = 0
         self.sub_sel = 0
-        self.act_text = ""           # free-text speech for ACT
+        self.act = TextInput(MAX_ACT)    # free-text speech for ACT
         self._act_target = None      # whoever you're speaking to (foe or companion)
         self.finished = False
         self.outcome = ""
         self._busy = False           # a turn is resolving on the worker thread
-        self._caret = 0.0
-        self._bs_timer = _BS_DELAY   # backspace hold-to-repeat countdown
+        self._blink = 0.0
 
     # --- menu contents ----------------------------------------------------
     def _menu(self):
@@ -151,7 +150,7 @@ class CombatScene:
             targets = self._act_targets()
             if len(targets) <= 1:
                 self._act_target = targets[0] if targets else None
-                self.act_text = ""
+                self.act.clear()
                 self.phase = "act_input"
             else:
                 self.sub_sel = 0
@@ -170,14 +169,14 @@ class CombatScene:
 
     def _on_act_target(self, combatant):
         self._act_target = combatant
-        self.act_text = ""
+        self.act.clear()
         self.phase = "act_input"
 
     def _act_input_key(self, event):
         if event.key == pygame.K_ESCAPE:
             self.phase = "menu"
         elif event.key == pygame.K_RETURN:
-            said = self.act_text.strip()
+            said = self.act.text.strip()
             if said:
                 tgt = self._act_target
                 self.combat.add_log(f"You: “{said}”")
@@ -185,11 +184,8 @@ class CombatScene:
                     self._resolve(lambda: speak_to_ally(self.combat, tgt, said, self.world))
                 else:
                     self._resolve(lambda: mercy_attempt(self.combat, tgt, said))
-        elif event.key == pygame.K_BACKSPACE:
-            self.act_text = self.act_text[:-1]
-            self._bs_timer = _BS_DELAY        # pause before hold-repeat kicks in
-        elif event.unicode and event.unicode.isprintable() and len(self.act_text) < 140:
-            self.act_text += event.unicode
+        else:
+            self.act.handle_key(event)
 
     def _on_item(self, entry):
         item = entry[0]
@@ -215,16 +211,8 @@ class CombatScene:
 
     # --- update -----------------------------------------------------------
     def update(self, dt):
-        self._caret = (self._caret + dt) % 1.0
-        # Hold Backspace to keep deleting in the ACT speech box.
-        if self.phase == "act_input" and self.act_text and \
-                pygame.key.get_pressed()[pygame.K_BACKSPACE]:
-            self._bs_timer -= dt
-            if self._bs_timer <= 0:
-                self.act_text = self.act_text[:-1]
-                self._bs_timer = _BS_INTERVAL
-        else:
-            self._bs_timer = _BS_DELAY
+        self._blink = (self._blink + dt) % 1.0
+        self.act.update(dt, active=(self.phase == "act_input"))
         if self.phase == "resolving" and not self._busy:
             if self.combat.over:
                 self.phase = "ended"
@@ -270,7 +258,7 @@ class CombatScene:
         self._draw_log(screen)
         # menu / submenu
         if self.phase == "resolving":
-            dots = "." * (1 + int(self._caret * 3))
+            dots = "." * (1 + int(self._blink * 3))
             draw_text(screen, dots, (T.SCREEN_W // 2, T.SCREEN_H - 60),
                       T.font(24), T.TEXT_DIM, center=True)
         elif self.phase == "ended":
@@ -296,14 +284,9 @@ class CombatScene:
         draw_text(screen, f"Speak to {tgt.name if tgt else 'it'}:",
                   (30, y), T.font(16, bold=True), T.TEXT)
         inp_font = T.font(18, mono=True)
-        caret = "|" if self._caret < 0.5 else ""
-        lines = wrap_text("> " + self.act_text, inp_font, T.SCREEN_W - 280) or ["> "]
-        lines = lines[-2:]
-        ly = y + 22
-        for i, ln in enumerate(lines):
-            draw_text(screen, ln + (caret if i == len(lines) - 1 else ""),
-                      (30, ly), inp_font, T.HEARTH)
-            ly += 22
+        lay = self.act.layout(inp_font, T.SCREEN_W - 280, max_lines=2)
+        self.act.draw(screen, (30, y + 22), inp_font, lay,
+                      blink=self._blink, color=T.HEARTH)
         draw_text(screen, "Enter · Esc back", (T.SCREEN_W - 20, T.SCREEN_H - 24),
                   T.font(13), T.TEXT_DIM, right=True)
 
