@@ -81,6 +81,21 @@ class WorldState:
     party: list[str] = field(default_factory=list)          # npc_ids travelling with you
     day: int = 1                                             # advances when you rest at camp
     storage: list[str] = field(default_factory=list)         # items stashed in the camp chest
+    # What the *player* decided was worth writing down, kept out of a conversation with
+    # the N key. Deliberately player-facing only: nothing here is ever shown to an NPC,
+    # because a character knowing what you chose to remember about them is a different
+    # feature with different problems. Plain dicts, so saving is a copy.
+    notes: list[dict] = field(default_factory=list)
+
+    # --- notes ------------------------------------------------------------
+    def add_note(self, text: str, source: str = "") -> dict | None:
+        """Keep a line. Returns None if it was blank or already written down."""
+        text = " ".join(str(text).split())
+        if not text or any(n.get("text") == text for n in self.notes):
+            return None
+        note = {"text": text, "source": source, "day": self.day}
+        self.notes.append(note)
+        return note
 
     # --- party ------------------------------------------------------------
     def in_party(self, npc_id: str) -> bool:

@@ -107,6 +107,7 @@ def _world_to_dict(state: WorldState) -> dict:
         "party": list(state.party),
         "day": state.day,
         "storage": list(state.storage),
+        "notes": [dict(n) for n in state.notes],
     }
 
 
@@ -148,6 +149,8 @@ def _world_from_dict(data: dict) -> WorldState:
         party=list(data.get("party", [])),
         day=data.get("day", 1),
         storage=list(data.get("storage", [])),
+        # Absent from saves written before notes existed; an empty notebook is right.
+        notes=[dict(n) for n in data.get("notes", [])],
     )
 
 

@@ -276,6 +276,10 @@ class DialogueBox:
         what = cmd.get("what")
         if cmd.get("cmd") == "close":
             self.hub = None
+        elif cmd.get("cmd") == "note":
+            note = self.world.add_note(cmd["text"], cmd.get("source", ""))
+            self.hub.message = ("Written down." if note
+                                else "You've already written that down.")
         elif what == "trade":
             if self.mode not in ("reveal", "await"):
                 self.hub.message = "Wait until they've answered you."

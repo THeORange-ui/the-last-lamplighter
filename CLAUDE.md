@@ -328,7 +328,18 @@ the JSON object), raising `LLMError` on failure.
 ## Controls / key routing gotchas
 
 - Overworld: Arrows/WASD move, **E** interact, **R** make camp, **I** inventory, **P** party,
-  **M** map, **J** journal, **Esc** menu.
+  **N** notes, **M** map, **J** journal, **Esc** menu.
+- **Notes are the player's, and only the player's** (`ui/notes.py`, `WorldState.notes`). In a
+  conversation, Ctrl → pick a line → Enter keeps it, with who said it and the day; **N**
+  opens the notebook anywhere, Backspace strikes one out. They are plain dicts on
+  `WorldState` so saving is a copy, and a save written before they existed loads with an
+  empty notebook. **Nothing here is ever shown to an NPC** — a character reacting to what
+  you chose to write down about them is a different feature with different problems.
+  The journal records what the *engine* noticed; this is for what the player noticed.
+- **Half-transparent panels don't stack.** `ui/inventory.py: _overlay` is 224 alpha because
+  those panels were built to sit over the overworld. Opened from the conversation hub they
+  would sit over *text*, so `main.draw` skips drawing the dialogue scene entirely while any
+  of them is up (`overlay_up`). Add a new full-screen panel to that list.
 - **`R` makes camp from anywhere** (`main.camp_action` → `camp_prompt` → `confirm_camp`).
   It records `flags["camp_return"]` and `R` again inside camp puts you back on the exact tile
   you left; walking out through a door clears the note, because you're plainly not coming

@@ -42,6 +42,7 @@ from ui.journal import draw_journal
 from ui.mapview import draw_full_map, draw_minimap
 from ui.night import NightScene, mark_rested, night_facts
 from ui.menu import Menu
+from ui.notes import NotesPanel
 from ui.party import PartyPanel
 from ui.storage import StoragePanel
 from ui.render import draw_hud, draw_overworld, draw_text
@@ -118,6 +119,8 @@ class Game:
         self.toast_timer = 0.0
         self.party_open = False
         self.party_panel: PartyPanel | None = None
+        self.notes_open = False
+        self.notes_panel: NotesPanel | None = None
         self.storage_open = False
         self.storage_panel: StoragePanel | None = None
         self.night: NightScene | None = None
@@ -224,6 +227,9 @@ class Game:
         elif what == "party":
             self.party_panel = PartyPanel(self.world)
             self.party_open = True
+        elif what == "notes":
+            self.notes_panel = NotesPanel(self.world)
+            self.notes_open = True
 
     def set_toast(self, text: str):
         self.toast = text
@@ -891,6 +897,10 @@ class Game:
                 cmd = self.inv_panel.handle_event(event)
                 if cmd:
                     self.handle_inventory_command(cmd)
+            elif self.notes_open:
+                cmd = self.notes_panel.handle_event(event)
+                if cmd and cmd.get("cmd") == "close":
+                    self.notes_open = False
             elif self.party_open:
                 cmd = self.party_panel.handle_event(event)
                 if cmd:
@@ -951,6 +961,9 @@ class Game:
                 elif event.key == pygame.K_p and not (self.journal_open or self.map_open):
                     self.party_panel = PartyPanel(self.world)
                     self.party_open = True
+                elif event.key == pygame.K_n and not (self.journal_open or self.map_open):
+                    self.notes_panel = NotesPanel(self.world)
+                    self.notes_open = True
                 elif event.key == pygame.K_r and not (self.journal_open or self.map_open):
                     self.camp_action()
                 elif not (self.journal_open or self.map_open) and event.key in INTERACT_KEYS:
@@ -964,7 +977,8 @@ class Game:
         if self.menu_open:
             self.menu.update(dt)
             return
-        if self.inventory_open or self.party_open or self.storage_open:
+        if (self.inventory_open or self.party_open or self.storage_open
+                or self.notes_open):
             return
 
         if self.scene == "overworld" and not (self.journal_open or self.map_open
@@ -1016,13 +1030,19 @@ class Game:
         hint = self.interaction_hint() if self.scene == "overworld" else ""
         draw_hud(self.screen, self.world, self.rooms, hint)
 
+        # The overlays below are half-transparent on purpose — they were built to sit
+        # over the overworld, and a conversation showing faintly through one of them is
+        # unreadable rather than atmospheric. So the conversation stands down while one
+        # is up. (The trade panel is drawn *by* the dialogue box, so it isn't in here.)
+        overlay_up = (self.journal_open or self.map_open or self.party_open
+                      or self.inventory_open or self.notes_open or self.storage_open)
         if self.scene == "intro":
             self.draw_intro()
         elif self.scene == "epilogue" and self.epilogue:
             self.epilogue.draw(self.screen)
         elif self.scene == "night" and self.night:
             self.night.draw(self.screen)
-        elif self.scene == "dialogue" and self.dialogue:
+        elif self.scene == "dialogue" and self.dialogue and not overlay_up:
             self.dialogue.draw(self.screen)
 
         if self.scene == "overworld" and not self.map_open:
@@ -1035,6 +1055,8 @@ class Game:
             self.inv_panel.draw(self.screen)
         if self.party_open and self.party_panel:
             self.party_panel.draw(self.screen)
+        if self.notes_open and self.notes_panel:
+            self.notes_panel.draw(self.screen)
         if self.storage_open and self.storage_panel:
             self.storage_panel.draw(self.screen)
         if self.menu_open:

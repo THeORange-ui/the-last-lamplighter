@@ -48,6 +48,10 @@ class ConvHub:
             self.sel = max(0, self.sel - 1)
         elif event.key in (pygame.K_DOWN, pygame.K_s):
             self.sel = min(len(self.transcript) - 1, self.sel + 1)
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if 0 <= self.sel < len(self.transcript):
+                who, text = self.transcript[self.sel]
+                return {"cmd": "note", "text": text, "source": "" if who == YOU else who}
         elif event.key == pygame.K_i:
             return {"cmd": "open", "what": "trade"}
         elif event.key == pygame.K_p:
@@ -122,5 +126,5 @@ class ConvHub:
                 ("J", "journal"), ("M", "map"), ("N", "notes")]
         draw_text(screen, "  ".join(f"[{k}] {v}" for k, v in keys), (m, y + 20),
                   T.font(14), T.TEXT_DIM)
-        draw_text(screen, "Up/Down select · [Esc] back", (T.SCREEN_W - m, y + 20),
-                  T.font(14), T.TEXT_DIM, right=True)
+        draw_text(screen, "Up/Down · [Enter] keep the line · [Esc] back",
+                  (T.SCREEN_W - m, y + 20), T.font(14), T.TEXT_DIM, right=True)
