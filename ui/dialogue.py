@@ -38,6 +38,7 @@ JOIN_ASIDES = 2          # extra cut-ins earned by a companion you deliberately 
 PLAYER_LABEL = "The outsider"   # how the player is named *to another character*
 
 BOX_H = 200              # back to about its old size, now that the body scrolls
+ASIDE_ROOM = 50          # extra height while a bystander's cut-in is on screen
 LINE_H = 25              # one body line; uniform, which is what makes scrolling simple
 INPUT_LINE_H = 22
 
@@ -49,6 +50,51 @@ HUB_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
 # reasonably draw over the world. Up/Down are free here — typing never produces them.
 SCROLL_UP = (pygame.K_UP, pygame.K_PAGEUP)
 SCROLL_DOWN = (pygame.K_DOWN, pygame.K_PAGEDOWN)
+
+
+# A beat shorter than this keeps accumulating. Tuned low on purpose: at 60 the
+# obvious case — "Hey there! Welcome to the tavern. I'm Bram." — came out as a single
+# page, which is the thing this is meant to fix.
+PAGE_MIN = 30
+PAGE_TAIL_MIN = 16       # a scrap this short folds back into the beat before it
+_SENTENCE_END = ".!?…"
+_TRAILERS = _SENTENCE_END + "\"'”’)"
+
+
+def split_pages(text: str, min_chars: int = PAGE_MIN) -> list[str]:
+    """Break a reply into short beats, the way people actually talk.
+
+    Purely presentational, and that is the point: the transcript, the notes, a
+    character's memory and anything handed to another character all keep the reply
+    whole. Only the *reveal* is paged. Doing this in the UI also costs the prompt
+    nothing — asking the model for an array of lines would make every other block of
+    `npc/agent.py:_build_prompt` that little bit quieter, for something the engine can
+    work out from punctuation.
+    """
+    text = text.strip()
+    if not text:
+        return [""]
+    pages, start, i, n = [], 0, 0, len(text)
+    while i < n:
+        ch = text[i]
+        i += 1
+        if ch not in _SENTENCE_END:
+            continue
+        while i < n and text[i] in _TRAILERS:
+            i += 1                        # take "..." and a closing quote along with it
+        if i < n and not text[i].isspace():
+            continue                      # a decimal point, or an abbreviation
+        if i - start < min_chars:
+            continue                      # too short to stand as its own beat
+        pages.append(text[start:i].strip())
+        start = i
+    tail = text[start:].strip()
+    if tail:
+        if pages and len(tail) < PAGE_TAIL_MIN:
+            pages[-1] += " " + tail       # don't end on three words alone
+        else:
+            pages.append(tail)
+    return pages or [text]
 
 
 class _Turn:
@@ -88,15 +134,19 @@ class DialogueBox:
             self._is_vendor = False
 
         self.input = TextInput(MAX_INPUT)
-        self.npc_line = ""
+        self.npc_line = ""              # the beat being shown, not the whole reply
+        self.pages: list[str] = []
+        self.page = 0
         self.reveal = 0.0
-        self.mode = "thinking"          # thinking | reveal | await | closing
+        self.mode = "thinking"          # thinking | reveal | more | await | closing
         self.banner: list[str] = []
         self._turn: _Turn | None = None
         self.finished = False           # set True when the box should close
         self._close_timer = 0.0
-        # Lines scrolled up from the bottom. Zero means pinned to the newest text, so
-        # the typewriter follows itself for free; scrolling up locks the view there.
+        # Lines scrolled down from the *top* of the current beat. Zero means the start
+        # of what they're saying, which is where you want to be now that a reply is
+        # broken into beats — anchoring to the newest text meant a cut-in arriving
+        # underneath could push the start of the beat off the top of the box.
         self.scroll = 0
         self._max_scroll = 0            # recomputed each draw, once the box is measured
         self._end_after_reveal = False
@@ -215,13 +265,17 @@ class DialogueBox:
         return ""
 
     def _consume_result(self, out: dict):
-        self.npc_line = out.get("dialogue", "…")
+        said = out.get("dialogue", "…")
+        # The transcript gets the whole reply; the box shows it a beat at a time.
+        self.transcript.append((self.npc_id, said))
+        self.pages = split_pages(said)
+        self.page = 0
+        self.npc_line = self.pages[0]
         self.reveal = 0.0
         self.mode = "reveal"
         self.banner = []
         self.aside = None
         self.scroll = 0                 # a new line is what you want to be looking at
-        self.transcript.append((self.npc_id, self.npc_line))
         self._maybe_aside(out)
         for eff in (out.get("result").effects if out.get("result") else []):
             self.banner.append(eff)
@@ -254,9 +308,12 @@ class DialogueBox:
             self.reveal += dt * REVEAL_CPS
             if self.reveal >= len(self.npc_line):
                 self.reveal = len(self.npc_line)
-                self.mode = "closing" if self._end_after_reveal else "await"
-                if self.mode == "closing":
-                    self._close_timer = CLOSE_LOCKOUT
+                if self.page < len(self.pages) - 1:
+                    self.mode = "more"          # they haven't finished speaking
+                else:
+                    self.mode = "closing" if self._end_after_reveal else "await"
+                    if self.mode == "closing":
+                        self._close_timer = CLOSE_LOCKOUT
         elif self.mode == "closing":
             # A parting line used to vanish 0.6s after it finished drawing, which is not
             # long enough to read the one line in a conversation that matters most. It
@@ -294,10 +351,10 @@ class DialogueBox:
             return
         # Scrolling works in every mode, including while a parting line is being read.
         if event.key in SCROLL_UP:
-            self.scroll = min(self.scroll + 1, self._max_scroll)
+            self.scroll = max(0, self.scroll - 1)
             return
         if event.key in SCROLL_DOWN:
-            self.scroll = max(0, self.scroll - 1)
+            self.scroll = min(self.scroll + 1, self._max_scroll)
             return
         if event.key == pygame.K_ESCAPE:
             self.finished = True
@@ -305,6 +362,9 @@ class DialogueBox:
         if self.mode == "closing":
             if self._close_timer <= 0:
                 self.finished = True
+            return
+        if self.mode == "more":
+            self._next_page()
             return
         if self.mode == "reveal":
             # fast-forward the typewriter
@@ -319,6 +379,15 @@ class DialogueBox:
                 self._start_turn(text)
         else:
             self.input.handle_key(event)
+
+    def _next_page(self) -> None:
+        """On to the next beat. Each one replaces the last, which is the whole reason
+        to break a reply up — you are meant to be reading one thing at a time."""
+        self.page += 1
+        self.npc_line = self.pages[self.page]
+        self.reveal = 0.0
+        self.scroll = 0
+        self.mode = "reveal"
 
     def _toggle_hub(self) -> None:
         self.hub = (None if self.hub is not None
@@ -376,8 +445,11 @@ class DialogueBox:
                                   else f"Can't sell the {name}: {why}.")
 
     def _aside_visible(self) -> bool:
-        """An aside only shows once the speaker's own line has finished revealing."""
+        """An aside only shows once the speaker has actually finished — which now means
+        their last beat, not merely the one on screen. Cutting in halfway through
+        somebody's sentence is exactly what an aside is not."""
         return bool(self.aside) and self.mode != "thinking" \
+            and self.page >= len(self.pages) - 1 \
             and self.reveal >= len(self.npc_line)
 
     def _body_lines(self, max_w: int) -> list[tuple[str, pygame.font.Font, tuple, int]]:
@@ -402,7 +474,12 @@ class DialogueBox:
 
     # --- draw -------------------------------------------------------------
     def draw(self, screen):
-        box = pygame.Rect(12, T.PLAY_H - BOX_H - 12, T.SCREEN_W - 24, BOX_H)
+        # Room for a cut-in, so it isn't left below the fold where it's easy to miss.
+        # Bounded now in a way it wasn't before paging: a beat is a couple of lines, so
+        # beat plus aside fits in one screen rather than needing an unbounded box.
+        extra = ASIDE_ROOM if self._aside_visible() else 0
+        box = pygame.Rect(12, T.PLAY_H - BOX_H - extra - 12,
+                          T.SCREEN_W - 24, BOX_H + extra)
         panel = pygame.Surface(box.size, pygame.SRCALPHA)
         panel.fill((*T.BOX_BG, 235))
         screen.blit(panel, box.topleft)
@@ -431,7 +508,8 @@ class DialogueBox:
         rows = lay.shown if self.mode == "await" else 1     # one row for the hint
         input_top = box.bottom - 12 - INPUT_LINE_H * rows
         rule_y = input_top - 8
-        banner = self.banner[:2]
+        # What they handed over lands with the end of what they said, not partway in.
+        banner = self.banner[:2] if self.page >= len(self.pages) - 1 else []
         banner_top = rule_y - 6 - 18 * len(banner)
         body_bot = banner_top - 4
 
@@ -445,7 +523,7 @@ class DialogueBox:
             visible = max(1, view.height // LINE_H)
             self._max_scroll = max(0, len(lines) - visible)
             self.scroll = max(0, min(self.scroll, self._max_scroll))
-            start = max(0, len(lines) - visible - self.scroll)
+            start = self.scroll
             screen.set_clip(view)
             y = view.top
             for text, fnt, color, indent in lines[start:start + visible]:
@@ -469,6 +547,9 @@ class DialogueBox:
                             line_h=INPUT_LINE_H, blink=self._blink)
             draw_text(screen, tlabel, (box.right - 16, input_top + 2),
                       T.font(13), T.TEXT_DIM, right=True)
+        elif self.mode == "more":
+            draw_text(screen, f"[Enter] go on   ({self.page + 1}/{len(self.pages)})",
+                      (body_x, input_top), T.font(14), T.TEXT_WARN)
         elif self.mode == "reveal":
             draw_text(screen, f"[Enter] skip · {tlabel}", (body_x, input_top),
                       T.font(14), T.TEXT_DIM)

@@ -376,6 +376,19 @@ the JSON object), raising `LLMError` on failure.
 - **`Show` transfers nothing** — it's the third trade verb and exists so putting an object in
   front of someone isn't an act of commerce. The NPC's briefing already carries their own
   words about anything present they have a bond with, so the reaction comes for free.
+- **A reply arrives in beats, not in one block** (`ui/dialogue.py: split_pages`). One long
+  paragraph is harder to take in than three short ones, so a reply is broken at sentence
+  ends once a beat passes `PAGE_MIN` (30 — tuned low, because at 60 "Hey there! Welcome to
+  the tavern. I'm Bram." came out as a single page, which is the case this exists for), and
+  Enter walks through them. It is **purely presentational**: the transcript, the notes, a
+  character's memory and anything handed to another character all keep the reply whole,
+  and only the reveal is paged. Doing the split in the UI is also why it cost the prompt
+  nothing — asking the model for an array of lines would make every other block of
+  `_build_prompt` that bit quieter, for something punctuation already tells us. The
+  effect banner and any aside land on the **final** beat; cutting in mid-sentence is
+  exactly what an aside is not. The body scrolls from the **top** of the current beat,
+  not the bottom — with paged content, anchoring to the newest line let an aside arriving
+  underneath push the start of the beat off the top of the box.
 - **Typing anywhere goes through `ui/textinput.py: TextInput`** — the dialogue box and the
   combat ACT box are the only two places the player types, and both were append-only with
   no caret, so fixing a typo six words back meant retyping six words. `TextInput` owns
