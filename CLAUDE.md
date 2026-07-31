@@ -231,12 +231,37 @@ Three layers enforce this, and changes usually touch all three:
   (`EventLog` on `world.events`; public events feed NPC briefings *and* the player journal),
   `save.py` (named slots under `save/`, each bundling the whole world **plus every NPC's
   memory + inventories**).
+- **`journal.py` events have two voices, because they have two audiences.** `text` is the
+  player's journal line; `npc_text` is the same event as a character hears it, and
+  `public_briefing()` renders `npc_text or text`. Pass `npc_text` whenever `text` says
+  "you" — "You bested Bram" reaching an NPC means *they* bested Bram. `actor` is the npc
+  who caused it, and the briefing excludes the character being briefed, so nobody learns
+  their own news from gossip (Wren was being told, as rumour, that Wren had given the
+  player a quest). This is the `effects`/`self_effects`/`observed` split from
+  `ActionResult`, arrived at separately. `PLAYER_LABEL` ("the outsider") lives here and
+  is what `ui/dialogue.py` and every `npc_text` use. Engine bookkeeping that is really UI
+  wording — "New note: …", "You checked back with …" — is `public=False` instead.
 
 **`npc/` — the LLM-driven brain.**
 - `agent.py` — a **LangGraph** `StateGraph`: `perceive` (build system/user prompt from the
-  character file + affinity + memory + a grounded `_world_briefing`) → `reason` (call LLM,
+  character file + affinity + memory + a grounded world briefing) → `reason` (call LLM,
   parse JSON) → `act` (validate/apply actions, refresh quests, write memory). Entry point
-  `npc_respond()`. The `APPROACH` sentinel = "player walked up"; it branches on
+  `npc_respond()`.
+  **`_build_prompt` is ordered by how often a block changes, not by topic.** Static first
+  (who you are, pinned memory, `_world_static` — the closed lists of rooms/npcs/items —
+  the action catalogue, the response rules), then everything live, ending with
+  `# What has happened between you before` immediately before the player's line. It used
+  to open with memory and disposition and put the ~6k-character action catalogue *behind*
+  them: the shared prefix across two turns was **22%**, so 78% was re-sent to carry a few
+  hundred characters of news, and what the character said last turn sat 12,000 characters
+  from the player's reply to it. Measured after: **90%**.
+  Two rules for anything added here. **A block moves as a unit** — never separate prose
+  from what it points at, so "Pursue this" stays with the agenda beat and the disposition
+  guidance stays with the affinity number; that costs a few percent of the prefix and is
+  the right trade, because a coherent prompt is the thing being optimised. And **anything
+  new that changes per turn goes at the bottom**, or it drags everything after it out of
+  the shared prefix. (`_world_briefing` was split into `_world_static` + `_situation` for
+  exactly this reason — it was a list of lists, not prose, and mixed both kinds.) The `APPROACH` sentinel = "player walked up"; it branches on
   `memory.has_met()` (fixed the original "same greeting every visit" bug — the greeting
   prompt simply wasn't told to use the in-context memory).
 - `combat_agent.py` — enemy turns and `mercy_attempt()` (free-text ACT). Persona enemies

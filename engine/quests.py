@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from engine.journal import PLAYER_LABEL
+
 OBJECTIVE_TYPES = {"reach", "interact", "fetch", "deliver", "talk_to", "judged"}
 REWARD_TYPES = {"item", "affinity", "info"}
 
@@ -311,6 +313,7 @@ def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
             from engine.witness import BEAT, record_experience
             record_experience(
                 state, "quest_complete", f"Completed the quest “{q.title}”.",
+                npc_text=f"{PLAYER_LABEL.capitalize()} finished “{q.title}”.",
                 room=state.player.room, salience=BEAT,
                 first_person=f'You were there when the player finished "{q.title}".',
                 # The giver gets their own, better-put line (npc/agent.py act, and
@@ -384,7 +387,8 @@ def _activate_followups(quest: Quest, state, known) -> None:
         if kind == "decide_later":
             cb = make_check_back_quest(quest.giver, quest.id)
             if add_quest(state, cb) is not None:
-                state.events.record("quest_start", f"New note: {cb.title}.")
+                state.events.record("quest_start", f"New note: {cb.title}.",
+                                    public=False)
         elif kind == "quest" and known is not None:
             try:
                 child = build_quest(fu["quest"], giver=quest.giver, known=known,
@@ -394,7 +398,8 @@ def _activate_followups(quest: Quest, state, known) -> None:
             if not state.has_quest(child.id):
                 state.quests.append(child)
                 state.events.record("quest_start",
-                                    f"A new task opens up: “{child.title}”.")
+                                    f"A new task opens up: “{child.title}”.",
+                                    public=False)
 
 
 def _grant_reward(quest: Quest, state) -> None:

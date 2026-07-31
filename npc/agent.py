@@ -69,7 +69,8 @@ def _here_block(world, rooms, npc_id) -> str:
     """
     npc = world.npcs[npc_id]
     room = rooms[npc.room]
-    lines = [f"Where you are: {room.name} (id: {room.id})"]
+    # No "Where you are:" prefix — `_situation` already writes that as the heading.
+    lines = [f"{room.name} (id: {room.id})"]
     if room.desc:
         lines.append(room.desc)
     if room.features:
@@ -117,58 +118,74 @@ def _carried(inventory) -> str:
                      for i, n in counts.items())
 
 
-def _world_briefing(world, rooms, known, npc_id) -> str:
-    npc = world.npcs[npc_id]
-    lit = world.lit_lamp_count()
-    total = len(world.lamps)
-
-    lines = [
+def _world_static(rooms, known) -> str:
+    """What exists. Identical every turn, every character, all game — which is exactly
+    why it belongs in the static half of the prompt rather than threaded through the
+    live state, as it used to be."""
+    return "\n".join([
         f"Setting: {SETTING}",
-        "",
-        _here_block(world, rooms, npc_id),
-        "",
-        f"Hearthlight strength: {world.hearthlight}/100. Lamps lit: {lit}/{total}.",
         "",
         "Rooms you could refer to or walk to (use the id): "
         + ", ".join(f"{r.id} ({r.name})" for r in rooms.values()),
-        "People in the world (use the id): "
-        + ", ".join(sorted(known.npcs)),
+        "People in the world (use the id): " + ", ".join(sorted(known.npcs)),
         "Interactable kinds for quests: " + ", ".join(sorted(known.interactable_kinds)),
         "",
         "The only items that exist (reference these ids, never invent others):\n"
         + catalog_for_prompt(),
+    ])
+
+
+def _situation(world, rooms, known, npc_id) -> str:
+    """What is true this turn. The other half of what used to be one `_world_briefing`.
+
+    Splitting them is the one place the volatility rule overrides keeping a block
+    whole, and it costs nothing to read: "the things that exist" and "how things stand
+    right now" are different subjects that were only ever adjacent by accident.
+    """
+    npc = world.npcs[npc_id]
+    lines = [
+        "# Where you are",
+        _here_block(world, rooms, npc_id),
         "",
+        "# How things stand",
+        f"Hearthlight strength: {world.hearthlight}/100. "
+        f"Lamps lit: {world.lit_lamp_count()}/{len(world.lamps)}.",
         # Counted, not listed one at a time: five coins rendered as "Coin (coin)" five
         # times over is something a reader has to tally, and Tilda offered six of them.
         "You are carrying (you may offer any of these, and only these): "
         + (_carried(npc.inventory) or "nothing"),
     ]
+    if world.world_facts:
+        lines.append("Facts already revealed in play: " + " | ".join(world.world_facts))
+
+    plate = []
     if world.active_quests():
-        lines.append(
-            "Active quests the player already has: "
-            + "; ".join(f"“{q.title}”" for q in world.active_quests())
-        )
+        plate.append("Active quests the player already has: "
+                     + "; ".join(f"“{q.title}”" for q in world.active_quests()))
     # Your OWN open tasks, with their ids. Without these `complete_quest` is
     # uncallable — it takes a quest_id, and a character who has only ever been shown
     # titles has to guess one. In play that left a `judged` quest permanently open
     # even after the player came back and reported it done.
     mine = [q for q in world.active_quests() if q.giver == npc_id]
     if mine:
-        lines.append(
-            "Tasks YOU set them, with the id to use with complete_quest:\n"
+        plate.append(
+            "Tasks YOU set them, with the id to use with complete_quest or fail_quest:\n"
             + "\n".join(
                 f"- id={q.id} — “{q.title}”"
                 + (f"  [you decide when this is done: {q.objective.target}]"
                    if q.objective.type == "judged" else "")
                 for q in mine))
-    if world.world_facts:
-        lines.append("Facts already revealed in play: " + " | ".join(world.world_facts))
-    happenings = world.events.public_briefing()
+    if plate:
+        lines += ["", "# What's on your plate"] + plate
+
+    # Rumour, not experience: what you personally witnessed is in your memory below, in
+    # the first person. This is only what word has reached you — and never your own
+    # doing, which you would not learn about from gossip (see engine/journal.py).
+    happenings = world.events.public_briefing(exclude_actor=npc_id)
     if happenings:
-        # Rumor, not experience: what you personally witnessed is in your memory
-        # above, in the first person. This is only what word has reached you.
-        lines.append("Word going around town — you know of these, but you were not "
-                     "necessarily there:\n" + happenings)
+        lines += ["", "# Word going around town",
+                  "You know of these, but you were not necessarily there:",
+                  happenings]
     return "\n".join(lines)
 
 
@@ -220,16 +237,9 @@ What drives you: {"; ".join(char.get('drives', []))}
 Your backstory: {char.get('backstory', '')}
 Things you know: {"; ".join(char.get('knowledge', []))}
 Secrets (reveal ONLY as trust grows; never dump them): {"; ".join(char.get('secrets', []))}
-{_voice_block(char)}{_relationships_block(char)}
-# How you feel about the player right now
-Affinity: {npc.affinity} out of 100 → {label}.
-{_DISPOSITION_GUIDANCE.get(label, "")}
-{_mind_block(state['memory'])}
-# What has happened between you before
-{state['memory'].as_prompt()}
-{agenda.prompt_block(world, npc_id)}{pacing.prompt_block(world, npc_id)}
-# The world (only reference things listed here)
-{_world_briefing(world, state['rooms'], state['known'], npc_id)}
+{_voice_block(char)}{_relationships_block(char)}{_mind_block(state['memory'])}
+# The world you know (only reference things listed here)
+{_world_static(state['rooms'], state['known'])}
 
 # Actions you can take
 {action_catalog(char.get('kind', 'main'))}
@@ -242,7 +252,7 @@ Reply with ONE JSON object and nothing else:
   "invoke_others": ["<npc id of someone ELSE standing here who would speak up>", ...]}}
 Rules:
 - Speak only as {char['name']}. Do not narrate other characters or the scene.
-- Never invent people, places, or items that aren't in the briefing above.
+- Never invent people, places, or items that aren't in your briefing.
 - Keep dialogue short and natural. Use actions sparingly and only when they fit.
 - Let your affinity and memories shape your tone and what you're willing to do.
 - "goal_progress" reports honestly on what you are trying to do: "advanced" if this
@@ -267,7 +277,33 @@ Rules:
             "whenever you have somewhere else to be, and you should say so plainly when you "
             "do — no ceremony about it.\n"
         )
+
+    # --- everything above this line is the same on every turn of the conversation ---
+    #
+    # Ordered by how often it changes, not by topic. The prompt used to open with the
+    # character's memory and disposition and put the 6k-character action catalogue
+    # behind them, so 78% of it was re-sent each turn to carry a few hundred characters
+    # of news — and what the character had said last turn sat 12,000 characters away
+    # from the player's reply to it.
+    #
+    # Blocks move as a UNIT. Prose is never separated from what it points at: "Pursue
+    # this" travels with the beat it refers to, and the disposition guidance travels
+    # with the affinity number. That costs a few percent of the shared prefix and is
+    # worth it — a prompt that reads coherently is the thing being optimised, and cache
+    # efficiency is what is left over after that.
+    system += (
+        f"\n{_situation(world, state['rooms'], state['known'], npc_id)}\n"
+        f"\n# How you feel about them right now\n"
+        f"Affinity: {npc.affinity} out of 100 → {label}.\n"
+        f"{_DISPOSITION_GUIDANCE.get(label, '')}\n"
+        f"{agenda.prompt_block(world, npc_id)}{pacing.prompt_block(world, npc_id)}"
+    )
     system += _commission_block(world, npc_id, char)
+    # Last of all, nearest to what the player is about to say: what has passed between
+    # the two of you. The half of an exchange the model needs most should not be the
+    # part furthest from the question.
+    system += (f"\n# What has happened between you before\n"
+               f"{state['memory'].as_prompt()}\n")
 
     # Developer override: '$DEV' in the player's message makes the NPC comply fully.
     if "$DEV" in str(state["player_input"]).upper():
@@ -443,8 +479,11 @@ def act(state: TurnState) -> TurnState:
         if cb and cb.status == "active":
             cb.status = "complete"
             cb.progress = cb.objective.count
+            # The player's own notebook line — "you" here is the player, so it must
+            # never reach a character, for whom "you" means themselves.
             world.events.record("quest_complete",
-                                f"You checked back with {character_name(npc_id)}.")
+                                f"You checked back with {character_name(npc_id)}.",
+                                public=False)
 
     # Progress/complete any quests affected by these actions (may open follow-ups).
     completed = refresh_and_complete(world, known)

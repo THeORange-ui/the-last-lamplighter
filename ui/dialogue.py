@@ -12,6 +12,7 @@ import threading
 import pygame
 
 from engine.items import display_name
+from engine.journal import PLAYER_LABEL as _PLAYER
 from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from llm import log as llm_log
@@ -35,7 +36,7 @@ _INPUT_LINES = 2         # wrapped lines of the input shown at once — a window
 MAX_INPUT = 400          # characters you may type in one message
 MAX_ASIDES = 2           # most times a bystander may cut into one conversation
 JOIN_ASIDES = 2          # extra cut-ins earned by a companion you deliberately pulled in
-PLAYER_LABEL = "The outsider"   # how the player is named *to another character*
+PLAYER_LABEL = _PLAYER.capitalize()   # how the player is named *to another character*
 
 BOX_H = 200              # back to about its old size, now that the body scrolls
 ASIDE_ROOM = 50          # extra height while a bystander's cut-in is on screen

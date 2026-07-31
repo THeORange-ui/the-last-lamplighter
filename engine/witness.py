@@ -55,15 +55,19 @@ def has_seen(state, npc_id: str, once_key: str) -> bool:
 def record_experience(state, kind: str, text: str, *, room: str | None = None,
                       first_person: str | None = None, salience: int = NOTE,
                       public: bool = True, once_key: str | None = None,
-                      targets=None, exclude=(), bond_items=()):
+                      targets=None, exclude=(), bond_items=(), npc_text: str = "",
+                      actor: str = ""):
     """Log an event, and write it into the memory of those who were there.
 
-    `text` is third-person, for the journal and the rumor feed. `first_person` is
-    what a witness remembers ("You watched the player..."). `targets` overrides the
-    witness set when the experience isn't simply "everyone in the room" — room entry,
-    for instance, is something the *party* did, not the residents who saw it.
+    `text` is the player's journal line. `npc_text` is the same event as another
+    character would hear it — pass it whenever `text` is written to the player, since
+    "you" means the character on that side. `first_person` is what a witness remembers
+    ("You watched the player..."). `targets` overrides the witness set when the
+    experience isn't simply "everyone in the room" — room entry, for instance, is
+    something the *party* did, not the residents who saw it.
     """
-    ev = state.events.record(kind, text, public=public, room=room, salience=salience)
+    ev = state.events.record(kind, text, public=public, room=room, salience=salience,
+                             npc_text=npc_text, actor=actor)
     if not first_person or salience < WITNESS_MIN:
         return ev
 

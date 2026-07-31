@@ -223,7 +223,9 @@ def heartbeat(state, rooms) -> Quest | None:
         state.flags["last_heartbeat"] = now
         npc = state.npcs[npc_id]
         npc.flags["nudges"] = _nudges(state, npc_id) + 1   # so it works round the cast
-        state.events.record("quest_start", f"New note: {quest.title}.")
+        # Journal wording for the player, not news: nobody in town gossips about a
+        # breadcrumb appearing in someone's notebook.
+        state.events.record("quest_start", f"New note: {quest.title}.", public=False)
         return quest
     return None
 

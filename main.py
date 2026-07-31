@@ -14,6 +14,7 @@ import pygame
 
 from engine.combat import combatant_from_npc, enemies_from_ids, make_combat
 from engine.interact import apply_interaction, is_live
+from engine.journal import PLAYER_LABEL
 from engine.items import CURRENCY, display_name, use_item
 from engine.quests import CHECK_BACK, find_check_back, refresh_and_complete
 from engine.save import (AUTOSAVE, latest_save, load_bundle, save_bundle,
@@ -770,13 +771,17 @@ class Game:
                 npc.affinity = max(npc.affinity, -5)
                 self.memory_for(npc_id).remember(
                     "You attacked the player, but they spared you instead of striking back.")
-                w.events.record("fight", f"{name} stood down. An uneasy peace holds.")
+                w.events.record("fight", f"{name} stood down. An uneasy peace holds.",
+                                actor=npc_id)
                 self.set_toast(f"{name} stands down.")
             else:
                 npc.flags["subdued"] = True
                 self.memory_for(npc_id).remember(
                     "You attacked the player and were beaten. You owe them your life.")
-                w.events.record("fight", f"You bested {name} in the fight they started.")
+                w.events.record(
+                    "fight", f"You bested {name} in the fight they started.",
+                    npc_text=f"{PLAYER_LABEL.capitalize()} bested {name} in the fight "
+                             f"{name} started.", actor=npc_id)
                 self.set_toast(f"You best {name}.")
 
     def interact(self):

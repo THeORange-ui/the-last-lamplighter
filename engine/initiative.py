@@ -209,7 +209,7 @@ def leave_threads(world, rooms, owed: list[str], anything_happened: bool) -> lis
         if add_quest(world, quest) is None:
             continue
         world.flags["last_heartbeat"] = pacing.tick(world)
-        world.events.record("quest_start", f"New note: {quest.title}.")
+        world.events.record("quest_start", f"New note: {quest.title}.", public=False)
         made.append(quest)
     if made or anything_happened:
         return made

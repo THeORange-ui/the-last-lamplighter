@@ -101,7 +101,8 @@ def _world_to_dict(state: WorldState) -> dict:
         "hearthlight": state.hearthlight,
         "events": {"seq": state.events._seq,
                    "list": [{"seq": e.seq, "kind": e.kind, "text": e.text,
-                             "public": e.public} for e in state.events.events]},
+                             "public": e.public, "npc_text": e.npc_text,
+                             "actor": e.actor} for e in state.events.events]},
         "ground_items": [{"room": g.room, "x": g.x, "y": g.y, "item": g.item}
                          for g in state.ground_items],
         "party": list(state.party),
@@ -129,8 +130,12 @@ def _world_from_dict(data: dict) -> WorldState:
     log = EventLog()
     ev = data.get("events", {})
     log._seq = ev.get("seq", 0)
+    # npc_text/actor are absent from saves written before events had two voices; an
+    # empty npc_text just falls back to the player-facing text, as it does everywhere.
     log.events = [Event(seq=e["seq"], kind=e["kind"], text=e["text"],
-                        public=e.get("public", True)) for e in ev.get("list", [])]
+                        public=e.get("public", True),
+                        npc_text=e.get("npc_text", ""), actor=e.get("actor", ""))
+                  for e in ev.get("list", [])]
 
     ground = [GroundItem(room=g["room"], x=g["x"], y=g["y"], item=g["item"])
               for g in data.get("ground_items", [])]

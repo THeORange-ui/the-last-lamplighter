@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from engine.items import display_name
+from engine.journal import PLAYER_LABEL
 from engine.quests import (OFFSCREEN_OBJECTIVES, QuestValidationError, add_quest,
                            fail_quest,
                            build_quest, build_simple_quest, find_check_back,
@@ -397,7 +398,10 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
             if add_quest(state, quest) is None:
                 result.debug.append(f"dropped quest {quest.id!r}: already satisfied")
                 continue
-            state.events.record("quest_start", f"{name} gave you the quest “{quest.title}”.")
+            state.events.record(
+                "quest_start", f"{name} gave you the quest “{quest.title}”.",
+                npc_text=f"{name} set {PLAYER_LABEL} a task: “{quest.title}”.",
+                actor=npc_id)
             _note(result, f"{name} gives you a quest: “{quest.title}”.",
                   f"You asked them to: “{quest.title}”.",
                   f"{name} asked the player to: “{quest.title}”.")
@@ -424,15 +428,19 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
                 continue
             if kind == "offscreen":
                 # Nobody handed this over in person — word of it arrived overnight.
-                state.events.record("quest_start",
-                                    f"Word from {name}: “{quest.title}”.")
+                state.events.record(
+                    "quest_start", f"Word from {name}: “{quest.title}”.",
+                    npc_text=f"{name} sent word to {PLAYER_LABEL} asking for help: "
+                             f"“{quest.title}”.", actor=npc_id)
                 _note(result, f"Word reached you from {name}, asking for help: "
                               f"“{quest.title}”.",
                       f"You sent word asking for help: “{quest.title}”.",
                       f"{name} sent word asking for help: “{quest.title}”.")
             else:
-                state.events.record("quest_start",
-                                    f"{name} asked you for help: “{quest.title}”.")
+                state.events.record(
+                    "quest_start", f"{name} asked you for help: “{quest.title}”.",
+                    npc_text=f"{name} asked {PLAYER_LABEL} for help: “{quest.title}”.",
+                    actor=npc_id)
                 _note(result, f"{name} asks a favour of you: “{quest.title}”.",
                       f"You asked them a favour: “{quest.title}”.",
                       f"{name} asked the player a favour: “{quest.title}”.")
@@ -593,7 +601,8 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
                 # Moss something and by morning everyone has heard a version of it.
                 if load_character(npc_id).get("gossip"):
                     state.events.record(
-                        "rumor", f"Word going round town: {info}", public=True)
+                        "rumor", f"Word going round town: {info}", public=True,
+                        actor=npc_id)
                     _note(result, "Word of it starts going round town.",
                           "You let it out, so it will be all round town by morning.",
                           f"{name} let it out; it will be round town by morning.")
@@ -618,7 +627,10 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
             if parted:
                 npc.flags.pop("ally_pledged", None)
                 result.left_party = True
-                state.events.record("party", f"{name} left your company.", public=True)
+                state.events.record(
+                    "party", f"{name} left your company.", public=True,
+                    npc_text=f"{name} stopped travelling with {PLAYER_LABEL}.",
+                    actor=npc_id)
             npc.room = room_id
             npc.x, npc.y = _free_interior_tile(room, room.blocked())
             _note(result,
@@ -634,7 +646,10 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
                 state.npcs[npc_id].flags["ally_pledged"] = True   # legacy mirror
                 result.joined_party = True
                 result.wants_combat = True
-                state.events.record("party", f"{name} joined you.", public=True)
+                state.events.record(
+                    "party", f"{name} joined you.", public=True,
+                    npc_text=f"{name} is travelling with {PLAYER_LABEL} now.",
+                    actor=npc_id)
                 _note(result, f"{name} takes up beside you — a companion now.",
                       "You agreed to travel with them for a while.",
                       f"{name} agreed to travel with the player.")
@@ -644,7 +659,10 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
                 state.npcs[npc_id].flags.pop("ally_pledged", None)
                 result.left_party = True
                 result.end_dialogue = True
-                state.events.record("party", f"{name} left your company.", public=True)
+                state.events.record(
+                    "party", f"{name} left your company.", public=True,
+                    npc_text=f"{name} stopped travelling with {PLAYER_LABEL}.",
+                    actor=npc_id)
                 _note(result, f"{name} parts ways with you.",
                       "You stopped travelling with them and went your own way.",
                       f"{name} stopped travelling with the player.")
