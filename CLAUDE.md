@@ -338,6 +338,13 @@ the JSON object), raising `LLMError` on failure.
   corner minimap is always up; **M** opens the full map. `waypoints()` turns each active
   objective into a room marker (reach → the room; talk_to/check_back/deliver → wherever that
   person is *now*; interact → the nearest unfinished one; fetch → where the thing is lying).
+  Markers are **numbered**, and the numbers key into the list underneath — three pips and
+  three quests with no way to tell which is which is a guessing game. Rooms are coloured
+  from their **biome** (`_palette` reads `theme.BIOMES`, so a new biome colours itself in),
+  visited rooms name who is standing in them, and a waypoint in a room you have never found
+  is **not hidden** — it becomes an arrow beside your own cell pointing the way, with
+  "somewhere north-east" in the list. Hiding it is how a player ends up holding a quest with
+  no idea which direction to walk.
 - **`Show` transfers nothing** — it's the third trade verb and exists so putting an object in
   front of someone isn't an act of commerce. The NPC's briefing already carries their own
   words about anything present they have a bond with, so the reaction comes for free.
