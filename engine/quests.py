@@ -327,6 +327,31 @@ def refresh_and_complete(state, known=None, on_complete=None) -> list[Quest]:
     return just_done
 
 
+FAIL_AFFINITY = -8       # what calling a task off costs the player, with its giver
+
+
+def fail_quest(state, quest: Quest) -> None:
+    """Close a quest unhappily, because its giver has decided it is over.
+
+    The mirror of `complete_quest`, and deliberately the *only* way a quest can fail:
+    nothing in the engine times anything out. A deadline would resolve a thread while
+    the player is somewhere else, which is the one thing Part 4 says not to do — content
+    resolved offscreen is content nobody gets to play — and a clock that both creates
+    pressure and reads world state to decide what to do about it is the shape
+    `engine/pacing.py` has oscillated over twice.
+
+    No follow-ups fire, and that needs no special case: `refresh_and_complete` only ever
+    looks at active quests, and this one no longer is. A failure ends its branch of the
+    tree rather than continuing it, which is the point.
+
+    The cost is relational, because that is the kind of failure this game can express.
+    A character who feels more strongly than this still has `adjust_affinity`.
+    """
+    quest.status = "failed"
+    state.adjust_affinity(quest.giver, FAIL_AFFINITY)
+    state.events.record("quest_failed", f"“{quest.title}” came to nothing.")
+
+
 def make_check_back_quest(giver: str, parent_id: str) -> Quest:
     """A visible breadcrumb: 'Check back with <giver>'. Completing the parent opens
     it; talking to the giver completes it and prompts them for the next step."""

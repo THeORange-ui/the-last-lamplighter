@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from engine.items import display_name
 from engine.quests import (OFFSCREEN_OBJECTIVES, QuestValidationError, add_quest,
+                           fail_quest,
                            build_quest, build_simple_quest, find_check_back,
                            open_request_from)
 from engine.state import GroundItem
@@ -84,6 +85,17 @@ ACTIONS: dict[str, str] = {
         "    Declare a quest you gave the player finished, because you judge it so. This is\n"
         "    how a \"judged\" quest ends — when what you actually needed has happened, say so\n"
         "    and close it. You can only close your own quests, and only once."
+    ),
+    "fail_quest": (
+        '- {"type": "fail_quest", "quest_id": "<id of a quest YOU gave>", "because": "<why>"}\n'
+        "    Call off something you asked for, because you have decided it is not going to\n"
+        "    happen: you have given up on it, someone else saw to it, or what you wanted\n"
+        "    stopped being worth wanting. It ends badly — no reward, and you think less of\n"
+        "    them for it.\n"
+        "    THIS IS RARE. Things you have asked for stay open for days, and that is\n"
+        "    normal. Being slow is not failing, and this is not a way to hurry anyone\n"
+        "    along. Reach for it only when the thing itself is over.\n"
+        "    Only your own quests, and only once."
     ),
     "offer_item": (
         '- {"type": "offer_item", "item": "<item id you are CARRYING>", "count": <int, default 1>}\n'
@@ -222,7 +234,8 @@ OFFSCREEN_ACTIONS = ["go", "take", "leave", "request_help", "tell"]
 # (quests, companionship, the works); a `vendor` mostly trades; a `minor` throwaway
 # NPC can only colour a scene and share a fact.
 ACTION_SETS: dict[str, list[str]] = {
-    "main": ["adjust_affinity", "give_quest", "complete_quest", "offer_item", "reveal_fact",
+    "main": ["adjust_affinity", "give_quest", "complete_quest", "fail_quest",
+             "offer_item", "reveal_fact",
              "use_item", "set_goal", "resolve_goal", "tell", "move_to", "join_party",
              "leave_party", "attack", "end_dialogue"],
     # A vendor is still a person with a plan — Sella has an arc — so she gets the
@@ -230,8 +243,8 @@ ACTION_SETS: dict[str, list[str]] = {
     # `request_help` too, or a vendor can ask for something concrete and have no way
     # to make it a thing the player can actually track — Sella did exactly that.
     "vendor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item",
-               "request_help", "complete_quest", "set_goal", "resolve_goal", "tell",
-               "end_dialogue"],
+               "request_help", "complete_quest", "fail_quest", "set_goal",
+               "resolve_goal", "tell", "end_dialogue"],
     # `offer_item` matters even for a throwaway NPC: without it Tilda agreed to hand over
     # bread and coins, was asked again directly, agreed again, and still could not do it —
     # the action was dropped at this gate every time. A minor promising payment they are
@@ -243,7 +256,7 @@ ACTION_SETS: dict[str, list[str]] = {
     # Sella did precisely that: a night's ask, priced in her own judgement, that she was
     # structurally incapable of ever settling. It read as her holding out.
     "minor": ["adjust_affinity", "offer_item", "reveal_fact", "use_item", "request_help",
-              "complete_quest", "tell", "end_dialogue"],
+              "complete_quest", "fail_quest", "tell", "end_dialogue"],
     # Not a character kind — the vocabulary of the world's turn. Gated through the same
     # `allowed_actions()` check as everything else, so these can never fire in dialogue
     # and a conversational action can never fire at night.
@@ -441,6 +454,22 @@ def apply_actions(state, npc_id, actions, known, rooms, *, as_kind: str = "") ->
             _note(result, f"{name} considers “{quest.title}” settled.",
                   f"You judged “{quest.title}” done, and told them so.",
                   f"{name} judged “{quest.title}” done.")
+
+        elif atype == "fail_quest":
+            qid = str(raw.get("quest_id", "")).strip()
+            quest = state.quest_by_id(qid)
+            if quest is None or quest.status != "active":
+                result.debug.append(f"fail_quest for unknown/inactive quest {qid!r}")
+                continue
+            if quest.giver != npc_id:
+                # Only the person who asked gets to call it off.
+                result.debug.append(
+                    f"{npc_id} tried to fail {qid!r}, which they did not give")
+                continue
+            fail_quest(state, quest)
+            _note(result, f"{name} calls “{quest.title}” off.",
+                  f"You gave up on “{quest.title}” and told them so.",
+                  f"{name} called off “{quest.title}”.")
 
         elif atype == "offer_item":
             item = str(raw.get("item", "")).strip()

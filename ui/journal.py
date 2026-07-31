@@ -23,10 +23,11 @@ def draw_journal(screen, world):
     y = 64
     active = world.active_quests()
     completed = [q for q in world.quests if q.status == "complete"]
+    failed = [q for q in world.quests if q.status == "failed"]
 
     draw_text(screen, "Quests", (margin, y), T.font(19, bold=True), T.TEXT)
     y += 28
-    if not active and not completed:
+    if not active and not completed and not failed:
         draw_text(screen, "Nothing yet. Talk to the townsfolk.", (margin + 8, y),
                   T.font(16), T.TEXT_DIM)
         y += 24
@@ -45,6 +46,12 @@ def draw_journal(screen, world):
     for q in completed:
         draw_text(screen, f"• {q.title}  — done", (margin + 8, y),
                   T.font(16), T.TEXT_GOOD)
+        y += 24
+    # Called off by whoever asked for it. Kept on the page rather than quietly removed:
+    # a thread that came to nothing is still something that happened to you.
+    for q in failed:
+        draw_text(screen, f"• {q.title}  — came to nothing", (margin + 8, y),
+                  T.font(16), T.TEXT_BAD)
         y += 24
 
     y += 12

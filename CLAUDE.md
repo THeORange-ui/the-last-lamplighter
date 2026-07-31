@@ -111,7 +111,16 @@ Three layers enforce this, and changes usually touch all three:
    target must resolve via `KnownEntities`). **`judged`** is the exception: its target is a
    plain-English criterion, `evaluate_progress` never satisfies it, and only the giver closes
    it via the `complete_quest` action — for things like "put my mind at rest about Ansel" that
-   no counter can decide. `build_quest()` raises `QuestValidationError` for
+   no counter can decide.
+   **Quests can fail, and only one thing fails them**: the giver's `fail_quest` action
+   (`quests.fail_quest` — `status = "failed"`, `FAIL_AFFINITY`, no reward). **Nothing in the
+   engine times anything out, deliberately.** A deadline resolves a thread while the player
+   is elsewhere, which is the one thing Part 4 rules out — content resolved offscreen is
+   content nobody gets to play — and a clock that creates pressure *and* reads world state
+   to decide what to do about it is the shape `engine/pacing.py` has oscillated over twice.
+   Failure needs no special case to stop follow-ups firing: `refresh_and_complete` only
+   looks at active quests, and a failed one isn't. The prompt says twice that failing is
+   rare and that being slow is not failing, because a model handed a verb will use it. `build_quest()` raises `QuestValidationError` for
    ungrounded targets; `refresh_and_complete(state, known)` recomputes progress from world
    state every turn, grants rewards, and opens **follow-ups**. `KnownEntities`
    (rooms/npcs/items/interactable_kinds) is the whitelist everything grounds against —
