@@ -25,14 +25,23 @@ from ui.shop import ShopPanel
 from ui.render import draw_text, wrap_text
 
 REVEAL_CPS = 55          # characters per second for the typewriter
-CLOSE_DELAY = 0.6        # seconds to linger after an end_dialogue line
+CLOSE_LOCKOUT = 0.4      # ignore keys this long after a parting line, so a held key
+                         # can't dismiss it before it has been read
 _BS_DELAY = 0.35         # hold time before backspace starts auto-repeating
 _BS_INTERVAL = 0.045     # delete one more character every this many seconds while held
-_INPUT_LINES = 2         # how many wrapped lines of the input to show (tail)
+_INPUT_LINES = 3         # how many wrapped lines of the input to show (tail)
 MAX_ASIDES = 2           # most times a bystander may cut into one conversation
+
+BOX_H = 280              # replies routinely ran past the old 198 and buried the input
+LINE_H = 25              # one body line; uniform, which is what makes scrolling simple
+INPUT_LINE_H = 22
 
 # Ctrl / Cmd toggles the trade view (I would collide with typing a message).
 TRADE_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
+# The body scrolls, because a long reply plus a cut-in does not fit any box we could
+# reasonably draw over the world. Arrows are free here — typing never produces them.
+SCROLL_UP = (pygame.K_UP, pygame.K_PAGEUP)
+SCROLL_DOWN = (pygame.K_DOWN, pygame.K_PAGEDOWN)
 
 
 class _Turn:
@@ -79,6 +88,10 @@ class DialogueBox:
         self._turn: _Turn | None = None
         self.finished = False           # set True when the box should close
         self._close_timer = 0.0
+        # Lines scrolled up from the bottom. Zero means pinned to the newest text, so
+        # the typewriter follows itself for free; scrolling up locks the view there.
+        self.scroll = 0
+        self._max_scroll = 0            # recomputed each draw, once the box is measured
         self._end_after_reveal = False
         self._caret = 0.0
         self._bs_timer = _BS_DELAY               # backspace hold-to-repeat countdown
@@ -142,6 +155,7 @@ class DialogueBox:
         self.mode = "reveal"
         self.banner = []
         self.aside = None
+        self.scroll = 0                 # a new line is what you want to be looking at
         self._maybe_aside(out)
         for eff in (out.get("result").effects if out.get("result") else []):
             self.banner.append(eff)
@@ -165,6 +179,7 @@ class DialogueBox:
             job, self._aside_job = self._aside_job, None
             if job["text"]:
                 self.aside = (job["npc"], job["text"])
+                self.scroll = 0         # somebody just spoke; show what they said
         if self.mode == "thinking" and self._turn and self._turn.done:
             self._consume_result(self._turn.value)
             self._turn = None
@@ -174,11 +189,12 @@ class DialogueBox:
                 self.reveal = len(self.npc_line)
                 self.mode = "closing" if self._end_after_reveal else "await"
                 if self.mode == "closing":
-                    self._close_timer = CLOSE_DELAY
+                    self._close_timer = CLOSE_LOCKOUT
         elif self.mode == "closing":
+            # A parting line used to vanish 0.6s after it finished drawing, which is not
+            # long enough to read the one line in a conversation that matters most. It
+            # now waits to be dismissed; the timer is only a guard against a held key.
             self._close_timer -= dt
-            if self._close_timer <= 0:
-                self.finished = True
 
         # Hold Backspace to keep deleting (the first delete happens on key-down).
         if self.mode == "await" and self.input_text and \
@@ -198,6 +214,13 @@ class DialogueBox:
             if cmd:
                 self._handle_trade(cmd)
             return
+        # Scrolling works in every mode, including while a parting line is being read.
+        if event.key in SCROLL_UP:
+            self.scroll = min(self.scroll + 1, self._max_scroll)
+            return
+        if event.key in SCROLL_DOWN:
+            self.scroll = max(0, self.scroll - 1)
+            return
         if event.key == pygame.K_ESCAPE:
             self.finished = True
             return
@@ -205,6 +228,10 @@ class DialogueBox:
         if event.key in TRADE_KEYS and self.mode in ("reveal", "await"):
             self.trade = (ShopPanel(self.world, self.npc_id, self.name) if self._is_vendor
                           else TradePanel(self.world, self.npc_id, self.name))
+            return
+        if self.mode == "closing":
+            if self._close_timer <= 0:
+                self.finished = True
             return
         if self.mode == "reveal":
             # fast-forward the typewriter
@@ -258,12 +285,29 @@ class DialogueBox:
         return bool(self.aside) and self.mode != "thinking" \
             and self.reveal >= len(self.npc_line)
 
+    def _body_lines(self, max_w: int) -> list[tuple[str, pygame.font.Font, tuple, int]]:
+        """Everything above the input row, already wrapped, one entry per drawn line.
+
+        Built as a flat list so the viewport can simply take a window of it — which is
+        the whole reason the aside no longer grows the box or gets truncated to two
+        lines. It is just more body, and body scrolls.
+        """
+        out: list[tuple[str, pygame.font.Font, tuple, int]] = []
+        if self.mode == "thinking":
+            return out
+        for ln in wrap_text(self.npc_line[: int(self.reveal)], T.font(19), max_w):
+            out.append((ln, T.font(19), T.TEXT, 0))
+        if self._aside_visible():
+            nid, line = self.aside
+            out.append((f"{character_name(nid)}:", T.font(15, bold=True),
+                        T.npc_color(nid), 0))
+            for ln in wrap_text(f"“{line}”", T.font(17), max_w - 12):
+                out.append((ln, T.font(17), T.TEXT_DIM, 12))
+        return out
+
     # --- draw -------------------------------------------------------------
     def draw(self, screen):
-        # The box grows upward while a bystander's aside is showing, so a long reply
-        # plus a cut-in doesn't spill past the input row.
-        extra = 66 if self._aside_visible() else 0
-        box = pygame.Rect(12, T.PLAY_H - 210 - extra, T.SCREEN_W - 24, 198 + extra)
+        box = pygame.Rect(12, T.PLAY_H - BOX_H - 12, T.SCREEN_W - 24, BOX_H)
         panel = pygame.Surface(box.size, pygame.SRCALPHA)
         panel.fill((*T.BOX_BG, 235))
         screen.blit(panel, box.topleft)
@@ -280,55 +324,82 @@ class DialogueBox:
         body_x, body_y = box.left + 16, box.top + 48
         max_w = box.width - 32
 
-        if self.mode == "thinking":
-            dots = "." * (1 + int(self._caret * 3))
-            draw_text(screen, dots, (body_x, body_y), T.font(22), T.TEXT_DIM)
+        # Measure from the bottom up: the input row and the effect banner take what they
+        # need, and the body viewport is whatever is left. Anything that doesn't fit
+        # scrolls rather than being drawn over the things underneath it.
+        inp_font = T.font(18, mono=True)
+        tlabel = "[Ctrl] shop" if self._is_vendor else "[Ctrl] trade"
+        if self._max_scroll:            # last frame's, which is close enough for a hint
+            tlabel = "Up/Down scroll · " + tlabel
+        reserve = T.font(13).size(tlabel)[0] + 24     # keep typing clear of the hint
+        if self.mode == "await":
+            in_lines = (wrap_text("> " + self.input_text, inp_font, max_w - reserve)
+                        or ["> "])[-_INPUT_LINES:]
         else:
-            shown = self.npc_line[: int(self.reveal)]
-            y = body_y
-            for ln in wrap_text(shown, T.font(19), max_w):
-                draw_text(screen, ln, (body_x, y), T.font(19), T.TEXT)
-                y += 26
-            # Somebody else in the room cutting in, once the reply has finished.
-            if self._aside_visible():
-                nid, line = self.aside
-                y += 4
-                draw_text(screen, f"{character_name(nid)}:", (body_x, y),
-                          T.font(15, bold=True), T.npc_color(nid))
-                y += 20
-                for ln in wrap_text(f"“{line}”", T.font(17), max_w - 12)[:2]:
-                    draw_text(screen, ln, (body_x + 12, y), T.font(17), T.TEXT_DIM)
-                    y += 22
+            in_lines = [""]                      # one row, for the hint
+        input_top = box.bottom - 12 - INPUT_LINE_H * len(in_lines)
+        rule_y = input_top - 8
+        banner = self.banner[:2]
+        banner_top = rule_y - 6 - 18 * len(banner)
+        body_bot = banner_top - 4
 
-        # effect banner
-        if self.banner:
-            by = box.bottom - 66
-            for line in self.banner[:2]:
+        # --- the NPC's words, in a clipped, scrollable viewport ---
+        view = pygame.Rect(body_x, body_y, max_w, max(LINE_H, body_bot - body_y))
+        if self.mode == "thinking":
+            draw_text(screen, "." * (1 + int(self._caret * 3)), (body_x, body_y),
+                      T.font(22), T.TEXT_DIM)
+        else:
+            lines = self._body_lines(max_w)
+            visible = max(1, view.height // LINE_H)
+            self._max_scroll = max(0, len(lines) - visible)
+            self.scroll = max(0, min(self.scroll, self._max_scroll))
+            start = max(0, len(lines) - visible - self.scroll)
+            screen.set_clip(view)
+            y = view.top
+            for text, fnt, color, indent in lines[start:start + visible]:
+                draw_text(screen, text, (body_x + indent, y), fnt, color)
+                y += LINE_H
+            screen.set_clip(None)
+            if self._max_scroll:
+                self._draw_scrollbar(screen, view, len(lines), visible, start)
+
+        if banner:
+            by = banner_top
+            for line in banner:
                 draw_text(screen, line, (body_x, by), T.font(14, bold=True), T.EFFECT)
                 by += 18
 
-        # input row (wraps onto a second line as it overflows; shows the tail)
-        iy = box.bottom - 34
-        pygame.draw.line(screen, T.WALL, (box.left + 14, iy - 6),
-                         (box.right - 14, iy - 6), 1)
+        # --- input row (shows the tail as it overflows) ---
+        pygame.draw.line(screen, T.WALL, (box.left + 14, rule_y),
+                         (box.right - 14, rule_y), 1)
         if self.mode == "await":
-            inp_font = T.font(18, mono=True)
             caret = "|" if self._caret < 0.5 else ""
-            lines = wrap_text("> " + self.input_text, inp_font, max_w - 96) or ["> "]
-            lines = lines[-_INPUT_LINES:]
-            ly = iy - 22 * (len(lines) - 1)
-            for i, ln in enumerate(lines):
-                draw_text(screen, ln + (caret if i == len(lines) - 1 else ""),
+            ly = input_top
+            for i, ln in enumerate(in_lines):
+                draw_text(screen, ln + (caret if i == len(in_lines) - 1 else ""),
                           (body_x, ly), inp_font, T.TEXT)
-                ly += 22
-            draw_text(screen, "[Ctrl] shop" if self._is_vendor else "[Ctrl] trade",
-                      (box.right - 16, iy + 2), T.font(13), T.TEXT_DIM, right=True)
+                ly += INPUT_LINE_H
+            draw_text(screen, tlabel, (box.right - 16, input_top + 2),
+                      T.font(13), T.TEXT_DIM, right=True)
         elif self.mode == "reveal":
-            tlabel = "[Ctrl] shop" if self._is_vendor else "[Ctrl] trade"
-            draw_text(screen, f"[Enter] skip · {tlabel}", (body_x, iy),
+            draw_text(screen, f"[Enter] skip · {tlabel}", (body_x, input_top),
                       T.font(14), T.TEXT_DIM)
+        elif self.mode == "closing":
+            draw_text(screen, "[Enter] leave", (body_x, input_top),
+                      T.font(14), T.TEXT_WARN)
         else:
-            draw_text(screen, "…", (body_x, iy), T.font(14), T.TEXT_DIM)
+            draw_text(screen, "…", (body_x, input_top), T.font(14), T.TEXT_DIM)
 
         if self.trade is not None:
             self.trade.draw(screen)
+
+    @staticmethod
+    def _draw_scrollbar(screen, view, total: int, visible: int, start: int) -> None:
+        """A thin bar on the right edge — the font has no arrow glyphs to point with."""
+        track = pygame.Rect(view.right - 3, view.top, 3, view.height)
+        pygame.draw.rect(screen, (52, 50, 68), track, border_radius=2)
+        h = max(10, int(track.height * visible / total))
+        top = track.top + int(track.height * start / total)
+        pygame.draw.rect(screen, (120, 116, 146),
+                         pygame.Rect(track.left, min(top, track.bottom - h), 3, h),
+                         border_radius=2)
