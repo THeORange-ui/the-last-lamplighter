@@ -67,5 +67,7 @@ class PartyPanel:
                       (m, y + 12), T.font(15), T.TEXT_DIM)
             draw_text(screen, "ask them to, they'll part ways.",
                       (m, y + 34), T.font(15), T.TEXT_DIM)
+        if self.message:
+            draw_text(screen, self.message, (m, T.SCREEN_H - 56), T.font(14), T.EFFECT)
         draw_text(screen, "Up/Down select · Enter talk · P/Esc close",
                   (T.SCREEN_W // 2, T.SCREEN_H - 30), T.font(14), T.TEXT_DIM, center=True)

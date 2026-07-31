@@ -284,9 +284,10 @@ the JSON object), raising `LLMError` on failure.
   dialogue/combat box mutates state during a turn, the render loop only reads.
 - `render.py` (`draw_overworld` with per-biome palettes, drawing interactables by `kind` and
   skipping `hidden` ones, HUD day, `wrap_text` —
-  lives here to avoid a dialogue↔inventory import cycle), `dialogue.py`, `combat.py`,
+  lives here to avoid a dialogue↔inventory import cycle), `dialogue.py`, `convhub.py`
+  (`ConvHub` — the in-conversation hub), `combat.py`,
   `inventory.py` (`InventoryPanel` + in-conversation `TradePanel`), `shop.py` (`ShopPanel` —
-  vendors, margin prices; opened by the trade key when talking to a `vendor`), `storage.py`
+  vendors, margin prices; opened by `I` in the hub when talking to a `vendor`), `storage.py`
   (`StoragePanel` — the camp chest), `party.py` (`PartyPanel`), `journal.py`, `menu.py`,
   `night.py` (`NightScene`), `theme.py` (`BIOMES`, fonts, colors), `sprites.py` (procedural
   low-res pixel art, nearest-scaled; no binary art committed).
@@ -348,10 +349,19 @@ the JSON object), raising `LLMError` on failure.
 - **`Show` transfers nothing** — it's the third trade verb and exists so putting an object in
   front of someone isn't an act of commerce. The NPC's briefing already carries their own
   words about anything present they have a bond with, so the reaction comes for free.
-- **Trade inside a conversation opens with Ctrl/Cmd, not I** (`ui/dialogue.py: TRADE_KEYS`) —
-  `I` collided with typing a message. Don't reintroduce letter keys as commands in the
-  dialogue box. For a `vendor` NPC the same key opens the **`ShopPanel`** (margin buy/sell)
-  instead of the barter `TradePanel`.
+- **Ctrl/Cmd inside a conversation opens the hub** (`ui/convhub.py`, `dialogue.py: HUB_KEYS`)
+  — a letter key would collide with typing a message, so don't reintroduce one in the
+  dialogue box. The hub shows **the transcript of this conversation** and puts the ordinary
+  function keys back within reach: `I` trade (the **`ShopPanel`** for a `vendor`, the barter
+  `TradePanel` otherwise), `P` party, `J` journal, `M` map, `N` notes, `Esc` back to the
+  conversation. It was a trap before — mid-conversation is exactly when you want to re-read a
+  quest or check where someone lives, and the only keys that did anything were typing.
+  The hub is **pure UI**: `handle_event` returns a command dict, `DialogueBox._handle_hub`
+  opens the trade panel itself and hands everything else to `main.Game` via
+  `overlay_request` / `take_dialogue_request()` — the dialogue box does not construct the
+  game's panels. Closing journal/map/party drops back to the hub, not to the conversation.
+  The dialogue box also keeps a `transcript` of everything said (player lines, replies and
+  asides), which is what the history view reads.
 - **Interactables use `E`** (`main.adjacent_targets` returns `("use", Interactable)`): the campfire
   rests you (heal + new day + restock), the chest opens storage.
 - **Combat ACT is a free-text speech box**, not a menu — the player types what they *say* and

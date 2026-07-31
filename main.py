@@ -195,10 +195,35 @@ class Game:
         if action == "close":
             self.party_open = False
         elif action == "talk":
+            if self.scene == "dialogue":
+                # Opened from the conversation hub. Walking off mid-sentence to start a
+                # different conversation is not what "P" meant here.
+                if self.party_panel:
+                    self.party_panel.message = "Not while you're talking to someone."
+                return
             # Talk to a companion in a normal conversation. If you ask them to part
             # ways, they decide to leave (the leave_party action), and no other way.
             self.party_open = False
             self.open_dialogue(cmd["npc"])
+
+    def take_dialogue_request(self) -> None:
+        """The conversation hub asking for one of the overlays this class owns.
+
+        The dialogue box has no business constructing the game's panels, so it names
+        what it wants and this opens it. Closing one drops back to the hub, which is
+        still sitting underneath — you came from there.
+        """
+        what = self.dialogue.overlay_request if self.dialogue else None
+        if not what:
+            return
+        self.dialogue.overlay_request = None
+        if what == "journal":
+            self.journal_open = True
+        elif what == "map":
+            self.map_open = True
+        elif what == "party":
+            self.party_panel = PartyPanel(self.world)
+            self.party_open = True
 
     def set_toast(self, text: str):
         self.toast = text
@@ -879,9 +904,16 @@ class Game:
                     self.scene = "overworld"
                     if self.loaded_save:
                         self.set_toast("Progress restored.")
+            elif self.scene == "dialogue" and (self.journal_open or self.map_open):
+                # Opened from the conversation hub, so these close back to the hub
+                # rather than letting the dialogue box see the key.
+                if event.type == pygame.KEYDOWN and event.key in (
+                        pygame.K_ESCAPE, pygame.K_j, pygame.K_m):
+                    self.journal_open = self.map_open = False
             elif self.scene == "dialogue":
                 if self.dialogue:
                     self.dialogue.handle_event(event)
+                    self.take_dialogue_request()
             elif self.scene == "epilogue":
                 if self.epilogue:
                     self.epilogue.handle_event(event)

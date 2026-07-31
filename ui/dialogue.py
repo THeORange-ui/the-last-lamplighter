@@ -20,6 +20,7 @@ from npc.interject import interject
 from npc.memory import NPCMemory
 from npc.roster import character_name, load_character
 from ui import theme as T
+from ui.convhub import YOU, ConvHub
 from ui.inventory import TradePanel
 from ui.shop import ShopPanel
 from ui.render import draw_text, wrap_text
@@ -36,8 +37,8 @@ BOX_H = 280              # replies routinely ran past the old 198 and buried the
 LINE_H = 25              # one body line; uniform, which is what makes scrolling simple
 INPUT_LINE_H = 22
 
-# Ctrl / Cmd toggles the trade view (I would collide with typing a message).
-TRADE_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
+# Ctrl / Cmd opens the conversation hub (a letter key would collide with typing).
+HUB_KEYS = (pygame.K_LCTRL, pygame.K_RCTRL, pygame.K_LMETA, pygame.K_RMETA)
 # The body scrolls, because a long reply plus a cut-in does not fit any box we could
 # reasonably draw over the world. Arrows are free here — typing never produces them.
 SCROLL_UP = (pygame.K_UP, pygame.K_PAGEUP)
@@ -96,6 +97,14 @@ class DialogueBox:
         self._caret = 0.0
         self._bs_timer = _BS_DELAY               # backspace hold-to-repeat countdown
         self.trade: TradePanel | None = None
+        # What has actually been said, in order. Feeds the hub's history view and the
+        # notes, and is the thing a companion would need if they were pulled in.
+        self.transcript: list[tuple[str, str]] = []
+        self.hub: ConvHub | None = None
+        # The hub asking for an overlay `main.Game` owns (journal / map / party /
+        # notes). Set here, taken and cleared there — the dialogue box has no business
+        # constructing the game's panels.
+        self.overlay_request: str | None = None
         self.combat_request: str | None = None   # npc_id if the NPC turned hostile
         # Someone else in the room cutting in (npc/interject.py). Capped per
         # conversation so a crowded room doesn't turn into a chorus.
@@ -107,6 +116,9 @@ class DialogueBox:
 
     # --- turn plumbing ----------------------------------------------------
     def _start_turn(self, player_input):
+        if player_input != APPROACH:      # "the player walked up" was never said aloud
+            self.transcript.append((YOU, player_input))
+        self.hub = None                   # saying something puts you back in the room
         self.mode = "thinking"
         turn = _Turn()
         self._turn = turn
@@ -156,6 +168,7 @@ class DialogueBox:
         self.banner = []
         self.aside = None
         self.scroll = 0                 # a new line is what you want to be looking at
+        self.transcript.append((self.npc_id, self.npc_line))
         self._maybe_aside(out)
         for eff in (out.get("result").effects if out.get("result") else []):
             self.banner.append(eff)
@@ -179,6 +192,7 @@ class DialogueBox:
             job, self._aside_job = self._aside_job, None
             if job["text"]:
                 self.aside = (job["npc"], job["text"])
+                self.transcript.append((job["npc"], job["text"]))
                 self.scroll = 0         # somebody just spoke; show what they said
         if self.mode == "thinking" and self._turn and self._turn.done:
             self._consume_result(self._turn.value)
@@ -214,6 +228,11 @@ class DialogueBox:
             if cmd:
                 self._handle_trade(cmd)
             return
+        if self.hub is not None:
+            cmd = self.hub.handle_event(event)
+            if cmd:
+                self._handle_hub(cmd)
+            return
         # Scrolling works in every mode, including while a parting line is being read.
         if event.key in SCROLL_UP:
             self.scroll = min(self.scroll + 1, self._max_scroll)
@@ -224,10 +243,11 @@ class DialogueBox:
         if event.key == pygame.K_ESCAPE:
             self.finished = True
             return
-        # Open trade/shop with Ctrl/Cmd (so every letter key stays free for typing).
-        if event.key in TRADE_KEYS and self.mode in ("reveal", "await"):
-            self.trade = (ShopPanel(self.world, self.npc_id, self.name) if self._is_vendor
-                          else TradePanel(self.world, self.npc_id, self.name))
+        # Ctrl/Cmd steps out of typing and into the hub, where letters are commands
+        # again. Trade is one of them now rather than the only thing Ctrl could do.
+        if event.key in HUB_KEYS:
+            self.hub = ConvHub(self.world, self.npc_id, self.transcript,
+                               is_vendor=self._is_vendor)
             return
         if self.mode == "closing":
             if self._close_timer <= 0:
@@ -249,6 +269,22 @@ class DialogueBox:
             self._bs_timer = _BS_DELAY        # pause before hold-repeat kicks in
         elif event.unicode and event.unicode.isprintable() and len(self.input_text) < 160:
             self.input_text += event.unicode
+
+    def _handle_hub(self, cmd):
+        """The hub asks; this decides. Trade it can open itself, since the panel is
+        already owned here; the rest belong to `main.Game` and go out as a request."""
+        what = cmd.get("what")
+        if cmd.get("cmd") == "close":
+            self.hub = None
+        elif what == "trade":
+            if self.mode not in ("reveal", "await"):
+                self.hub.message = "Wait until they've answered you."
+            else:
+                self.trade = (ShopPanel(self.world, self.npc_id, self.name)
+                              if self._is_vendor
+                              else TradePanel(self.world, self.npc_id, self.name))
+        else:
+            self.overlay_request = what
 
     def _handle_trade(self, cmd):
         action = cmd.get("cmd")
@@ -328,7 +364,7 @@ class DialogueBox:
         # need, and the body viewport is whatever is left. Anything that doesn't fit
         # scrolls rather than being drawn over the things underneath it.
         inp_font = T.font(18, mono=True)
-        tlabel = "[Ctrl] shop" if self._is_vendor else "[Ctrl] trade"
+        tlabel = "[Ctrl] more"          # history, trade, journal, map, party, notes
         if self._max_scroll:            # last frame's, which is close enough for a hint
             tlabel = "Up/Down scroll · " + tlabel
         reserve = T.font(13).size(tlabel)[0] + 24     # keep typing clear of the hint
@@ -390,6 +426,10 @@ class DialogueBox:
         else:
             draw_text(screen, "…", (body_x, input_top), T.font(14), T.TEXT_DIM)
 
+        # The trade panel's own backdrop is half-transparent (it was built to sit over
+        # the small dialogue box), so the hub steps aside rather than showing through it.
+        if self.hub is not None and self.trade is None:
+            self.hub.draw(screen)
         if self.trade is not None:
             self.trade.draw(screen)
 
