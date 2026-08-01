@@ -11,3 +11,6 @@ logs/
 
 # founding design doc — kept locally, not shipped
 ORIGINAL_GAME_SETTING.md
+
+# Player preferences (local, not part of the project)
+prefs.json

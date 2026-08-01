@@ -45,6 +45,7 @@ from ui.night import NightScene, mark_rested, night_facts
 from ui.menu import Menu
 from ui.notes import NotesPanel
 from ui.party import PartyPanel
+from ui.settings import SettingsPanel
 from ui.storage import StoragePanel
 from ui.render import draw_hud, draw_overworld, draw_text
 
@@ -122,6 +123,8 @@ class Game:
         self.party_panel: PartyPanel | None = None
         self.notes_open = False
         self.notes_panel: NotesPanel | None = None
+        self.settings_open = False
+        self.settings_panel: SettingsPanel | None = None
         self.storage_open = False
         self.storage_panel: StoragePanel | None = None
         self.night: NightScene | None = None
@@ -165,6 +168,9 @@ class Game:
         action = cmd.get("cmd")
         if action == "close":
             self.menu_open = False
+        elif action == "settings":
+            self.settings_panel = SettingsPanel()
+            self.settings_open = True
         elif action == "save":
             self.do_save(self.save_name)
             self.set_toast(f"Saved to “{self.save_name}”.")
@@ -232,7 +238,7 @@ class Game:
             self.party_panel = PartyPanel(self.world, in_conversation=True)
             self.party_open = True
         elif what == "notes":
-            self.notes_panel = NotesPanel(self.world)
+            self.notes_panel = NotesPanel(self.world, in_conversation=True)
             self.notes_open = True
 
     def set_toast(self, text: str):
@@ -897,6 +903,10 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif self.settings_open:
+                cmd = self.settings_panel.handle_event(event)
+                if cmd and cmd.get("cmd") == "close":
+                    self.settings_open = False
             elif self.menu_open:
                 cmd = self.menu.handle_event(event)
                 if cmd:
@@ -909,6 +919,14 @@ class Game:
                 cmd = self.notes_panel.handle_event(event)
                 if cmd and cmd.get("cmd") == "close":
                     self.notes_open = False
+                elif cmd and cmd.get("cmd") == "show" and self.dialogue:
+                    # Reading a note out to whoever you're talking to. The panel found
+                    # the note; the dialogue box owns the turn it starts.
+                    why = self.dialogue.show_note(cmd["note"])
+                    if why:
+                        self.notes_panel.message = why
+                    else:
+                        self.notes_open = False
             elif self.party_open:
                 cmd = self.party_panel.handle_event(event)
                 if cmd:
@@ -982,6 +1000,8 @@ class Game:
             self.toast_timer -= dt
         self._update_bark(dt)
 
+        if self.settings_open:
+            return
         if self.menu_open:
             self.menu.update(dt)
             return
@@ -1043,7 +1063,8 @@ class Game:
         # unreadable rather than atmospheric. So the conversation stands down while one
         # is up. (The trade panel is drawn *by* the dialogue box, so it isn't in here.)
         overlay_up = (self.journal_open or self.map_open or self.party_open
-                      or self.inventory_open or self.notes_open or self.storage_open)
+                      or self.inventory_open or self.notes_open or self.storage_open
+                      or self.settings_open)
         if self.scene == "intro":
             self.draw_intro()
         elif self.scene == "epilogue" and self.epilogue:
@@ -1067,8 +1088,13 @@ class Game:
             self.notes_panel.draw(self.screen)
         if self.storage_open and self.storage_panel:
             self.storage_panel.draw(self.screen)
-        if self.menu_open:
+        # Settings is opened *from* the pause menu, so the menu stands down under it
+        # for the same reason a conversation does — a half-transparent panel over a
+        # menu is two menus at once.
+        if self.menu_open and not self.settings_open:
             self.menu.draw(self.screen, self.save_name)
+        if self.settings_open and self.settings_panel:
+            self.settings_panel.draw(self.screen)
 
         if self.camp_prompt and self.scene == "overworld":
             self.draw_camp_prompt()

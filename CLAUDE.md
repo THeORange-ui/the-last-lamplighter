@@ -344,6 +344,9 @@ the JSON object), raising `LLMError` on failure.
 - **Places & the day:** the camp room has `campfire`/`chest` interactables — `main.interact` →
   `use_interactable` → `engine.interact.apply_interaction`, whose effects heal, `day++` and
   restock vendors (the fire) or return `panel="storage"` (the chest → `StoragePanel`).
+- **The journal opens with "Last night"** (`ui/journal.py`, from
+  `world.flags["last_night_reports"]`). The reports were always in the log, but a flat
+  chronological list is the wrong shape for the one question you have on waking.
 - **The night is the world's turn** (`ui/night.py`). Resting at the fire is the only **cut**
   the game has — the one moment the world may change without the player — which is the whole
   substrate of Part 4. `main.use_interactable` captures `world.events._seq` *before* the
@@ -378,14 +381,31 @@ the JSON object), raising `LLMError` on failure.
 ## Controls / key routing gotchas
 
 - Overworld: Arrows/WASD move, **E** interact, **R** make camp, **I** inventory, **P** party,
-  **N** notes, **M** map, **J** journal, **Esc** menu.
+  **N** notes, **M** map, **J** journal, **Esc** menu (→ **Settings**).
+- **Settings are presentation only** (`ui/settings.py`, `engine/prefs.py`, gitignored
+  `prefs.json`). Nothing on that page may change what happens in the world, which is why
+  it opens from the pause menu at any time and lives outside the save — a preference
+  belongs to the person playing, not to a playthrough. **Paged replies default to off**:
+  breaking a reply into beats reads well when the prose was *written* for it, and ours is
+  written in one breath by a model, so cutting it against its own rhythm made warm
+  characters sound clipped. Keys are **shown, not bound** — rebinding means threading an
+  action-name layer through `main.handle_events`, the dialogue box, the hub and eight
+  panels, which is its own piece of work.
 - **Notes are the player's, and only the player's** (`ui/notes.py`, `WorldState.notes`). In a
   conversation, Ctrl → pick a line → Enter keeps it, with who said it and the day; **N**
   opens the notebook anywhere, Backspace strikes one out. They are plain dicts on
   `WorldState` so saving is a copy, and a save written before they existed loads with an
-  empty notebook. **Nothing here is ever shown to an NPC** — a character reacting to what
-  you chose to write down about them is a different feature with different problems.
-  The journal records what the *engine* noticed; this is for what the player noticed.
+  empty notebook. The journal records what the *engine* noticed; this is for what the
+  player noticed.
+  **An NPC never sees your notebook, but you may read one note out to them** — in a
+  conversation, `N` then Enter (`DialogueBox.show_note`). That is the `Show` verb aimed
+  at words instead of objects: a synthesized player line through `_start_turn`, no
+  action, no validation. It is safe *because* notes are verbatim — you may keep a line
+  or strike it out, never edit it — so quoting one cannot invent anything, and the NPC
+  can reasonably believe it. The line names who said it and on what day, and handles
+  the source being the listener ("these are your own words") or the player. This is
+  what Sella was asking for when she said "bring me the words cleanly, not your promise
+  wrapped around them"; the loop existed in the fiction before it existed in the code.
 - **Half-transparent panels don't stack.** `ui/inventory.py: _overlay` is 224 alpha because
   those panels were built to sit over the overworld. Opened from the conversation hub they
   would sit over *text*, so `main.draw` skips drawing the dialogue scene entirely while any

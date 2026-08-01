@@ -23,10 +23,13 @@ LINE_H = 21
 
 
 class NotesPanel:
-    def __init__(self, world):
+    def __init__(self, world, *, in_conversation: bool = False):
         self.world = world
         self.sel = max(0, len(world.notes) - 1)
         self.message = ""
+        # Opened from the conversation hub, Enter reads a note out to whoever you are
+        # talking to. Outside one there is nobody to read it to.
+        self.in_conversation = in_conversation
 
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
@@ -41,6 +44,10 @@ class NotesPanel:
             self.sel = max(0, self.sel - 1)
         elif event.key in (pygame.K_DOWN, pygame.K_s):
             self.sel = min(len(notes) - 1, self.sel + 1)
+        elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if self.in_conversation:
+                return {"cmd": "show", "note": dict(notes[self.sel])}
+            self.message = "Nobody here to read it to."
         elif event.key in (pygame.K_BACKSPACE, pygame.K_DELETE, pygame.K_x):
             gone = notes.pop(self.sel)
             self.sel = max(0, min(self.sel, len(notes) - 1))
@@ -92,5 +99,8 @@ class NotesPanel:
 
         if self.message:
             draw_text(screen, self.message, (m, T.SCREEN_H - 56), T.font(14), T.EFFECT)
-        draw_text(screen, "Up/Down select · Backspace strike out · N/Esc close",
-                  (T.SCREEN_W // 2, T.SCREEN_H - 30), T.font(14), T.TEXT_DIM, center=True)
+        keys = ("Up/Down select · Enter read it out · Backspace strike out · N/Esc close"
+                if self.in_conversation
+                else "Up/Down select · Backspace strike out · N/Esc close")
+        draw_text(screen, keys, (T.SCREEN_W // 2, T.SCREEN_H - 30),
+                  T.font(14), T.TEXT_DIM, center=True)

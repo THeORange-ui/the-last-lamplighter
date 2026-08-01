@@ -12,7 +12,8 @@ from engine.save import list_saves
 from ui import theme as T
 from ui.render import draw_text
 
-MAIN_OPTIONS = ["Continue", "Save", "Load", "Save As", "Save and Quit"]
+MAIN_OPTIONS = ["Continue", "Settings", "Save", "Load", "Save As",
+                "Save and Quit"]
 
 
 class Menu:
@@ -53,6 +54,8 @@ class Menu:
             choice = MAIN_OPTIONS[self.sel]
             if choice == "Continue":
                 return {"cmd": "close"}
+            if choice == "Settings":
+                return {"cmd": "settings"}
             if choice == "Save":
                 return {"cmd": "save"}
             if choice == "Load":

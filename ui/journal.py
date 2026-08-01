@@ -21,6 +21,18 @@ def draw_journal(screen, world):
               T.font(14), T.TEXT_DIM, right=True)
 
     y = 64
+    # What the world did while you slept. It was already in the log below, but a flat
+    # chronological list is the wrong shape for "did anything happen last night?" —
+    # the one question you have on waking. Cleared and rewritten by each rest.
+    last_night = world.flags.get("last_night_reports") or []
+    if last_night:
+        draw_text(screen, "Last night", (margin, y), T.font(19, bold=True), T.HEARTH)
+        y += 26
+        for line in last_night[:4]:
+            draw_text(screen, f"· {line}", (margin + 8, y), T.font(15), T.TEXT)
+            y += 21
+        y += 12
+
     active = world.active_quests()
     completed = [q for q in world.quests if q.status == "complete"]
     failed = [q for q in world.quests if q.status == "failed"]

@@ -13,6 +13,7 @@ import pygame
 
 from engine.items import display_name
 from engine.journal import PLAYER_LABEL as _PLAYER
+from engine import prefs
 from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from llm import log as llm_log
@@ -27,7 +28,6 @@ from ui.shop import ShopPanel
 from ui.textinput import TextInput
 from ui.render import draw_text, wrap_text
 
-REVEAL_CPS = 55          # characters per second for the typewriter
 CLOSE_LOCKOUT = 0.4      # ignore keys this long after a parting line, so a held key
                          # can't dismiss it before it has been read
 _INPUT_LINES = 2         # wrapped lines of the input shown at once — a window that
@@ -265,11 +265,43 @@ class DialogueBox:
         self.hub = None                 # you waved them over; watch them arrive
         return ""
 
+    def show_note(self, note: dict) -> str:
+        """Read one of your notes out to whoever you are talking to.
+
+        The third trade verb pointed at words instead of objects: nothing changes hands,
+        you simply put what somebody said in front of somebody else. It needs no action
+        and no validation, because a note is a **verbatim** line you kept — you can keep
+        one or strike it out, never edit it — so quoting it cannot invent anything. That
+        is also what makes it worth anything: Sella asked for "the words cleanly, not
+        your promise wrapped around them", and this is the only way to give her them.
+
+        Returns "" if it was read out, or why not.
+        """
+        if self.mode not in ("reveal", "await"):
+            return "Wait until they've answered you."
+        text = str(note.get("text", "")).strip()
+        if not text:
+            return "There's nothing written there."
+        src, day = note.get("source", ""), note.get("day", 1)
+        if not src:
+            whose = f"This is what I wrote down on day {day}"
+        elif src == self.npc_id:
+            whose = f"These are your own words, as I set them down on day {day}"
+        else:
+            whose = (f"These are {character_name(src)}'s own words, as I set them down "
+                     f"on day {day} — not my account of them")
+        self._start_turn(
+            "[You open your notebook and read it out, word for word.] "
+            f"{whose}: “{text}”")
+        return ""
+
     def _consume_result(self, out: dict):
         said = out.get("dialogue", "…")
         # The transcript gets the whole reply; the box shows it a beat at a time.
         self.transcript.append((self.npc_id, said))
-        self.pages = split_pages(said)
+        # Paging is a presentation choice and nothing else — off by default, because
+        # a reply written in one breath reads clipped when it is cut into beats.
+        self.pages = split_pages(said) if prefs.get("paged_dialogue") else [said]
         self.page = 0
         self.npc_line = self.pages[0]
         self.reveal = 0.0
@@ -306,7 +338,8 @@ class DialogueBox:
             self._consume_result(self._turn.value)
             self._turn = None
         elif self.mode == "reveal":
-            self.reveal += dt * REVEAL_CPS
+            speed = prefs.get("text_speed")          # 0 = no typewriter at all
+            self.reveal = (self.reveal + dt * speed) if speed else len(self.npc_line)
             if self.reveal >= len(self.npc_line):
                 self.reveal = len(self.npc_line)
                 if self.page < len(self.pages) - 1:
