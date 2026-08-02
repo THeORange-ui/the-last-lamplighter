@@ -417,6 +417,11 @@ the JSON object), raising `LLMError` on failure.
   the character as speech. A player input prefixed with `PLAYER_DOES` is rendered as a
   third-person description of the act instead, and the transcript keeps it under its own
   speaker (`convhub.ACT`) so the history doesn't attribute it to "You:" either.
+  **The memory line needs the same branch** (`agent.act`). It is written as
+  `Player said: "<input>" | You replied: ...`, so without a case for it an act was filed
+  as speech with the raw sentinel inside — and unlike a prompt, memory persists and is
+  later compacted, so a malformed line outlives the conversation. Any future input that
+  is not literally something the player said needs a branch in *both* places.
 - **Half-transparent panels don't stack.** `ui/inventory.py: _overlay` is 224 alpha because
   those panels were built to sit over the overworld. Opened from the conversation hub they
   would sit over *text*, so `main.draw` skips drawing the dialogue scene entirely while any

@@ -502,6 +502,14 @@ def act(state: TurnState) -> TurnState:
     mem = state["memory"]
     if state["player_input"] == APPROACH:
         line = f'The player approached; you said: "{state["dialogue"]}"'
+    elif str(state["player_input"]).startswith(PLAYER_DOES):
+        # An act is already a third-person account of what happened, so it is the
+        # memory as it stands — it must NOT go through the "Player said:" wrapper,
+        # which would file a thing that was done as a thing that was said, sentinel
+        # and all. This is the line that persists and later gets compacted, so a
+        # malformed one here outlives the conversation it came from.
+        act = " ".join(str(state["player_input"])[len(PLAYER_DOES):].split())
+        line = f'{act} | You said: "{state["dialogue"]}"'
     else:
         line = f'Player said: "{state["player_input"]}" | You replied: "{state["dialogue"]}"'
     # The actor's own memory takes the first-person phrasing. Using the player-facing
@@ -568,8 +576,9 @@ def summarize_memory(npc_id, prior_summary, old_entries):
         f"capturing the relationship, key facts, promises made, and how {char['name']} "
         f"feels about them. Merge the earlier summary with the newer events; keep only "
         f"what would matter later.\n"
-        f"CRITICAL — do not mix up who did what. In the notes, 'you' is {char['name']} "
-        f"and 'the player' is the other person. Deeds the PLAYER did stay the player's: "
+        f"CRITICAL — do not mix up who did what. In the notes, 'you' is {char['name']}; "
+        f"'the player' and 'the outsider' are both the other person. Deeds the PLAYER "
+        f"did stay the player's: "
         f"if a note says you watched them light a lamp, then THEY lit it, not you. "
         f"Never take on their errands, their quests or their possessions as your own, "
         f"and never describe yourself as someone you merely met.\n"

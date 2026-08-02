@@ -291,9 +291,9 @@ class DialogueBox:
         if not src:
             whose = f"a line from their own notebook, written down on day {day}"
         elif src == self.npc_id:
-            whose = f"a line of your own, written down on day {day}"
+            whose = f"a record of your own words, which they noted down on day {day}"
         else:
-            whose = (f"a line they wrote down while {character_name(src)} was speaking, "
+            whose = (f"a record of {character_name(src)}'s own words, which they noted down "
                      f"on day {day}")
         self._start_turn(f"{PLAYER_DOES}{PLAYER_LABEL} reads you {whose}:\n“{text}”")
         return ""
