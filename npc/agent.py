@@ -350,9 +350,10 @@ Rules:
                     "If they could actually help, ask them before they walk off."
                 )
     elif str(state["player_input"]).startswith(PLAYER_DOES):
-        # An act, not a line. It is already written in the third person, about them.
+        # An act, not a line. It is already written in the third person, about them —
+        # so it needs no framing beyond the same closer every other turn gets.
         user = (f'{str(state["player_input"])[len(PLAYER_DOES):].strip()}\n\n'
-                f'React to that, as {char["name"]}. They have not said anything else.')
+                f'Respond now as {char["name"]}.')
     else:
         user = (
             f'The player says to you: "{state["player_input"]}"\n\n'

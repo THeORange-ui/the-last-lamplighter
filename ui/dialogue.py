@@ -289,17 +289,13 @@ class DialogueBox:
             return "There's nothing written there."
         src, day = note.get("source", ""), note.get("day", 1)
         if not src:
-            whose = f"a line they wrote down themselves on day {day}"
+            whose = f"a line from their own notebook, written down on day {day}"
         elif src == self.npc_id:
-            whose = (f"your own words back to you, copied down while you were speaking "
-                     f"on day {day}")
+            whose = f"a line of your own, written down on day {day}"
         else:
-            whose = (f"{character_name(src)}'s own words, copied down while "
-                     f"{character_name(src)} was speaking on day {day} — not their "
-                     f"account of them, the words themselves")
-        self._start_turn(
-            f"{PLAYER_DOES}{PLAYER_LABEL} takes out a notebook, finds a page, and reads "
-            f"you {whose}:\n“{text}”")
+            whose = (f"a line they wrote down while {character_name(src)} was speaking, "
+                     f"on day {day}")
+        self._start_turn(f"{PLAYER_DOES}{PLAYER_LABEL} reads you {whose}:\n“{text}”")
         return ""
 
     def _consume_result(self, out: dict):
