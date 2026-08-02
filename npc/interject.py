@@ -147,7 +147,7 @@ def join_conversation(world, npc_id: str, host_id: str, said: list, memory) -> s
         f"Personality: {char.get('personality', '')}\n"
         f"Speech style: {char.get('speech_style', '')}\n"
         + (f"What you are trying to do: {goal['want']}\n" if goal else "")
-        + f"\nYou are travelling with the outsider. They have just waved you over into a "
+        + f"\nYou are travelling with the player. They have just waved you over into a "
           f"conversation they were already having with {host}, so you are part of it now.\n"
           "You have been standing near enough to have caught most of it.\n\n"
           "Say ONE line, out loud, as you step in. Under 30 words. Speak to whichever of "
@@ -167,7 +167,7 @@ def join_conversation(world, npc_id: str, host_id: str, said: list, memory) -> s
     heard = " / ".join(f"{who}: {text[:90]}" if who else text[:90]
                        for who, text in recent[-3:])
     memory.remember(
-        f"The outsider brought you into their conversation with {host}. "
+        f"The player brought you into their conversation with {host}. "
         f"You heard: {heard}" + (f' You said: "{line}"' if line else "")
     )
     return line

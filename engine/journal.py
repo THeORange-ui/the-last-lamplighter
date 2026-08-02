@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 # How the player is referred to when a line is written *for a character to read*. "You"
 # is the character in every prompt this game builds, so the player is always third
 # person on that side of the fence. ui/dialogue.py imports this for the same reason.
-PLAYER_LABEL = "the outsider"
+PLAYER_LABEL = "the player"
 
 
 @dataclass

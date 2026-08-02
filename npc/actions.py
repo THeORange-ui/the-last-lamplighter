@@ -173,7 +173,7 @@ ACTIONS: dict[str, str] = {
         '                     "target": "<item id / npc id / a plain-English criterion>",\n'
         '                     "npc": "<id, deliver only>"},\n'
         '       "reward": {"type": "item|affinity|info", "value": "<item you CARRY / int / fact>"}}}\n'
-        "    Send word asking the outsider for one thing.\n"
+        "    Send word asking the player for one thing.\n"
         "    CHOOSE THE TYPE BY PICTURING HOW IT ENDS. Ask yourself: the moment they have\n"
         "    done it, what tells anyone it is done?\n"
         "      • If the doing IS the whole of it — hand me that flask, carry this to her,\n"
@@ -196,7 +196,7 @@ ACTIONS: dict[str, str] = {
     "go": (
         '- {"type": "go", "room": "<room id>", "why": "<short, in your own words>"}\n'
         "    Walk somewhere overnight and stay there. Only rooms from the list you were\n"
-        "    given — anywhere else is somewhere the outsider could never follow you to.\n"
+        "    given — anywhere else is somewhere the player could never follow you to.\n"
         "    This is a real move: you are gone from where you were, and whoever comes\n"
         "    looking will find you where you went."
     ),

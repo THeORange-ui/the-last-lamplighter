@@ -238,7 +238,7 @@ Three layers enforce this, and changes usually touch all three:
   who caused it, and the briefing excludes the character being briefed, so nobody learns
   their own news from gossip (Wren was being told, as rumour, that Wren had given the
   player a quest). This is the `effects`/`self_effects`/`observed` split from
-  `ActionResult`, arrived at separately. `PLAYER_LABEL` ("the outsider") lives here and
+  `ActionResult`, arrived at separately. `PLAYER_LABEL` ("the player") lives here and
   is what `ui/dialogue.py` and every `npc_text` use. Engine bookkeeping that is really UI
   wording — "New note: …", "You checked back with …" — is `public=False` instead.
 
