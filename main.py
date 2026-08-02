@@ -39,7 +39,7 @@ from ui.dialogue import DialogueBox
 from ui.combat import CombatScene
 from ui.epilogue import Epilogue
 from ui.inventory import InventoryPanel
-from ui.journal import draw_journal
+from ui.journal import JournalPanel
 from ui.mapview import draw_full_map, draw_minimap
 from ui.night import NightScene, mark_rested, night_facts
 from ui.menu import Menu
@@ -109,6 +109,8 @@ class Game:
         self.scene = "intro"          # intro | overworld | dialogue
         self.dialogue: DialogueBox | None = None
         self.journal_open = False
+        # Kept between openings so a folded section stays folded for the session.
+        self.journal_panel = JournalPanel(self.world)
         self.map_open = False
         self.epilogue: Epilogue | None = None
         self.menu_open = False
@@ -156,6 +158,7 @@ class Game:
         NPCMemory.restore_all(mems)
         ensure_world_complete(world)
         self.world = world
+        self.journal_panel = JournalPanel(world)   # it holds a world reference
         self.memories = {}            # drop cache so live memory reloads from disk
         self.save_name = name
         self.menu_open = False
@@ -915,6 +918,10 @@ class Game:
                 cmd = self.inv_panel.handle_event(event)
                 if cmd:
                     self.handle_inventory_command(cmd)
+            elif self.journal_open:
+                cmd = self.journal_panel.handle_event(event)
+                if cmd and cmd.get("cmd") == "close":
+                    self.journal_open = False
             elif self.notes_open:
                 cmd = self.notes_panel.handle_event(event)
                 if cmd and cmd.get("cmd") == "close":
@@ -940,12 +947,12 @@ class Game:
                     self.scene = "overworld"
                     if self.loaded_save:
                         self.set_toast("Progress restored.")
-            elif self.scene == "dialogue" and (self.journal_open or self.map_open):
-                # Opened from the conversation hub, so these close back to the hub
-                # rather than letting the dialogue box see the key.
-                if event.type == pygame.KEYDOWN and event.key in (
-                        pygame.K_ESCAPE, pygame.K_j, pygame.K_m):
-                    self.journal_open = self.map_open = False
+            elif self.scene == "dialogue" and self.map_open:
+                # Opened from the conversation hub, so it closes back to the hub rather
+                # than letting the dialogue box see the key.
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE,
+                                                                  pygame.K_m):
+                    self.map_open = False
             elif self.scene == "dialogue":
                 if self.dialogue:
                     self.dialogue.handle_event(event)
@@ -972,15 +979,13 @@ class Game:
                 if event.key == pygame.K_ESCAPE:
                     if self.map_open:
                         self.map_open = False
-                    elif self.journal_open:
-                        self.journal_open = False
                     else:
                         self.menu.open()
                         self.menu_open = True
                 elif event.key == pygame.K_m:
                     self.map_open = not self.map_open
                 elif event.key == pygame.K_j:
-                    self.journal_open = not self.journal_open
+                    self.journal_open = True
                 elif event.key == pygame.K_i and not (self.journal_open or self.map_open):
                     self.inv_panel = InventoryPanel(self.world)
                     self.inventory_open = True
@@ -1074,12 +1079,12 @@ class Game:
         elif self.scene == "dialogue" and self.dialogue and not overlay_up:
             self.dialogue.draw(self.screen)
 
-        if self.scene == "overworld" and not self.map_open:
+        if self.scene == "overworld" and not self.map_open and not overlay_up:
             draw_minimap(self.screen, self.world, self.rooms)
         if self.map_open:
             draw_full_map(self.screen, self.world, self.rooms)
         if self.journal_open:
-            draw_journal(self.screen, self.world)
+            self.journal_panel.draw(self.screen)
         if self.inventory_open and self.inv_panel:
             self.inv_panel.draw(self.screen)
         if self.party_open and self.party_panel:

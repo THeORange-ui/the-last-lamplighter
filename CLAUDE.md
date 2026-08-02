@@ -344,9 +344,14 @@ the JSON object), raising `LLMError` on failure.
 - **Places & the day:** the camp room has `campfire`/`chest` interactables — `main.interact` →
   `use_interactable` → `engine.interact.apply_interaction`, whose effects heal, `day++` and
   restock vendors (the fire) or return `panel="storage"` (the chest → `StoragePanel`).
-- **The journal opens with "Last night"** (`ui/journal.py`, from
-  `world.flags["last_night_reports"]`). The reports were always in the log, but a flat
-  chronological list is the wrong shape for the one question you have on waking.
+- **The journal folds and scrolls** (`ui/journal.py: JournalPanel`). Built as a flat
+  list of lines carrying a section index — the `ui/convhub.py` shape — so scrolling is a
+  slice and folding is a filter. It used to draw straight down the page and run off the
+  bottom. `main.Game` keeps one panel between openings so a folded section stays folded;
+  `do_load` rebuilds it, because it holds a world reference. It **opens with "Last
+  night"** (`world.flags["last_night_reports"]`) — those reports were always in the log,
+  but a flat chronological list is the wrong shape for the one question you have on
+  waking. It does **not** list items: that predates the inventory, which owns it now.
 - **The night is the world's turn** (`ui/night.py`). Resting at the fire is the only **cut**
   the game has — the one moment the world may change without the player — which is the whole
   substrate of Part 4. `main.use_interactable` captures `world.events._seq` *before* the
@@ -406,6 +411,12 @@ the JSON object), raising `LLMError` on failure.
   the source being the listener ("these are your own words") or the player. This is
   what Sella was asking for when she said "bring me the words cleanly, not your promise
   wrapped around them"; the loop existed in the fiction before it existed in the code.
+- **An act is not a spoken line** (`npc/agent.py: PLAYER_DOES`). Reading a note out and
+  holding an object out are things the player *does*; both used to be wrapped in
+  `The player says to you: "[You hold out the lantern]"`, so a stage direction reached
+  the character as speech. A player input prefixed with `PLAYER_DOES` is rendered as a
+  third-person description of the act instead, and the transcript keeps it under its own
+  speaker (`convhub.ACT`) so the history doesn't attribute it to "You:" either.
 - **Half-transparent panels don't stack.** `ui/inventory.py: _overlay` is 224 alpha because
   those panels were built to sit over the overworld. Opened from the conversation hub they
   would sit over *text*, so `main.draw` skips drawing the dialogue scene entirely while any

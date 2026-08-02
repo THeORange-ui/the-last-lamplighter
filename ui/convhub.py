@@ -26,6 +26,7 @@ LINE_H = 21
 BODY_TOP = 78
 FOOTER_H = 62
 YOU = "you"          # transcript speaker id for the player
+ACT = "*act*"        # ...and for something the player did rather than said
 
 
 class ConvHub:
@@ -51,7 +52,8 @@ class ConvHub:
         elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             if 0 <= self.sel < len(self.transcript):
                 who, text = self.transcript[self.sel]
-                return {"cmd": "note", "text": text, "source": "" if who == YOU else who}
+                return {"cmd": "note", "text": text,
+                        "source": "" if who in (YOU, ACT) else who}
         elif event.key == pygame.K_i:
             return {"cmd": "open", "what": "trade"}
         elif event.key == pygame.K_p:
@@ -69,6 +71,12 @@ class ConvHub:
         """(entry index, text, font, colour, indent) — flat, so scrolling is a slice."""
         out = []
         for i, (who, text) in enumerate(self.transcript):
+            if who == ACT:
+                # Something done, not said: no name, because nobody spoke.
+                for ln in wrap_text(text, T.font(15), max_w - 22):
+                    out.append((i, ln, T.font(15), T.TEXT_WARN, 14))
+                out.append((i, "", T.font(6), T.TEXT, 0))
+                continue
             you = who == YOU
             label = "You" if you else character_name(who)
             color = T.TEXT if you else T.npc_color(who)

@@ -138,7 +138,10 @@ def join_conversation(world, npc_id: str, host_id: str, said: list, memory) -> s
     host = character_name(host_id)
     recent = said[-JOIN_LINES:]
     goal = open_goal(world.npcs[npc_id])
-    transcript = "\n".join(f"{who}: {text}" for who, text in recent) or "(nothing yet)"
+    # An empty speaker is something that was *done* rather than said (a note read out,
+    # an object held up); it is already written as a description, so it needs no name.
+    transcript = "\n".join(f"{who}: {text}" if who else text
+                           for who, text in recent) or "(nothing yet)"
     system = (
         f"You are {char['name']} — {char.get('role', '')}.\n"
         f"Personality: {char.get('personality', '')}\n"
@@ -161,7 +164,8 @@ def join_conversation(world, npc_id: str, host_id: str, said: list, memory) -> s
     except LLMError:
         return ""
     line = str(out.get("line", "")).strip()[:_MAX_LINE]
-    heard = " / ".join(f"{who}: {text[:90]}" for who, text in recent[-3:])
+    heard = " / ".join(f"{who}: {text[:90]}" if who else text[:90]
+                       for who, text in recent[-3:])
     memory.remember(
         f"The outsider brought you into their conversation with {host}. "
         f"You heard: {heard}" + (f' You said: "{line}"' if line else "")

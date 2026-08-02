@@ -25,6 +25,11 @@ from npc.roster import character_name, load_character
 
 # Sentinel player_input meaning "the player just walked up" — NPC greets first.
 APPROACH = "__approach__"
+# The player *did* something rather than said something — held out an object, read a
+# note aloud. The rest of the string is a third-person description of the act, and it
+# gets rendered as one. Wrapping it in 'The player says to you: "[You hold out the
+# lantern]"' made a stage direction read as a spoken line, which is not what happened.
+PLAYER_DOES = "__does__"
 
 SETTING = (
     "Emberhold is a small town trapped in permanent dusk. Its great lantern, the "
@@ -344,6 +349,10 @@ Rules:
                     "grudgingly, or bluntly, or by complaining about it rather than asking. "
                     "If they could actually help, ask them before they walk off."
                 )
+    elif str(state["player_input"]).startswith(PLAYER_DOES):
+        # An act, not a line. It is already written in the third person, about them.
+        user = (f'{str(state["player_input"])[len(PLAYER_DOES):].strip()}\n\n'
+                f'React to that, as {char["name"]}. They have not said anything else.')
     else:
         user = (
             f'The player says to you: "{state["player_input"]}"\n\n'

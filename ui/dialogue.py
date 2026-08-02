@@ -17,12 +17,12 @@ from engine import prefs
 from engine.state import affinity_label
 from engine.trade import buy_from_npc, give_to_npc, sell_to_npc
 from llm import log as llm_log
-from npc.agent import APPROACH, npc_respond
+from npc.agent import APPROACH, PLAYER_DOES, npc_respond
 from npc.interject import interject, join_conversation
 from npc.memory import NPCMemory
 from npc.roster import character_name, load_character
 from ui import theme as T
-from ui.convhub import YOU, ConvHub
+from ui.convhub import ACT, YOU, ConvHub
 from ui.inventory import TradePanel
 from ui.shop import ShopPanel
 from ui.textinput import TextInput
@@ -177,7 +177,11 @@ class DialogueBox:
 
     # --- turn plumbing ----------------------------------------------------
     def _start_turn(self, player_input):
-        if player_input != APPROACH:      # "the player walked up" was never said aloud
+        if str(player_input).startswith(PLAYER_DOES):
+            # A stage direction, not a line — kept in the transcript under its own
+            # speaker so the history doesn't attribute an act to "You:" as speech.
+            self.transcript.append((ACT, player_input[len(PLAYER_DOES):].strip()))
+        elif player_input != APPROACH:    # "the player walked up" was never said aloud
             self.transcript.append((YOU, player_input))
         self.hub = None                   # saying something puts you back in the room
         self.mode = "thinking"
@@ -246,7 +250,8 @@ class DialogueBox:
         # to be named in the third person here or Wren reads her own question back as
         # hers. This codebase has shipped that confusion three times; see the memory
         # compaction note in CLAUDE.md.
-        said = [(PLAYER_LABEL if who == YOU else character_name(who), text)
+        said = [("" if who == ACT else
+                 PLAYER_LABEL if who == YOU else character_name(who), text)
                 for who, text in self.transcript]
         job = {"done": False, "npc": npc_id, "text": ""}
 
@@ -284,15 +289,17 @@ class DialogueBox:
             return "There's nothing written there."
         src, day = note.get("source", ""), note.get("day", 1)
         if not src:
-            whose = f"This is what I wrote down on day {day}"
+            whose = f"a line they wrote down themselves on day {day}"
         elif src == self.npc_id:
-            whose = f"These are your own words, as I set them down on day {day}"
+            whose = (f"your own words back to you, copied down while you were speaking "
+                     f"on day {day}")
         else:
-            whose = (f"These are {character_name(src)}'s own words, as I set them down "
-                     f"on day {day} — not my account of them")
+            whose = (f"{character_name(src)}'s own words, copied down while "
+                     f"{character_name(src)} was speaking on day {day} — not their "
+                     f"account of them, the words themselves")
         self._start_turn(
-            "[You open your notebook and read it out, word for word.] "
-            f"{whose}: “{text}”")
+            f"{PLAYER_DOES}{PLAYER_LABEL} takes out a notebook, finds a page, and reads "
+            f"you {whose}:\n“{text}”")
         return ""
 
     def _consume_result(self, out: dict):
@@ -459,8 +466,8 @@ class DialogueBox:
             # Nothing changes hands — you just hold it out. The NPC's briefing already
             # carries their own words about anything here they have a bond with.
             self.trade = None
-            self._start_turn(f"[You hold out the {name} where {self.name} can see it, "
-                             f"and say nothing.]")
+            self._start_turn(f"{PLAYER_DOES}{PLAYER_LABEL} holds out the {name} where "
+                             f"you can see it, and says nothing.")
         elif action == "gift":
             if give_to_npc(self.world, npc, item):
                 self.world.adjust_affinity(self.npc_id, 2)

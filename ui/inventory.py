@@ -97,8 +97,13 @@ class InventoryPanel:
         m = 28
         draw_text(screen, "INVENTORY", (m, 20), T.font(26, bold=True), T.HEARTH)
         p = self.world.player
-        draw_text(screen, f"HP {p.hp}/{p.max_hp}    Coins {p.inventory.count(CURRENCY)}",
-                  (T.SCREEN_W - m, 26), T.font(15), T.TEXT_DIM, right=True)
+        # Coins get their own weight: they were folded into a dim line of stats and
+        # were the one number a player actually looks for before opening a shop.
+        coins = p.inventory.count(CURRENCY)
+        draw_text(screen, f"{coins} coin{'' if coins == 1 else 's'}",
+                  (T.SCREEN_W - m, 20), T.font(20, bold=True), T.HEARTH, right=True)
+        draw_text(screen, f"HP {p.hp}/{p.max_hp}", (T.SCREEN_W - m, 46),
+                  T.font(15), T.TEXT_DIM, right=True)
 
         items = self._items()
         self.sel = _clamp(self.sel, len(items))
